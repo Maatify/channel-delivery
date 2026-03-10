@@ -7,6 +7,7 @@ namespace Maatify\ChannelDelivery\Application;
 use Maatify\ChannelDelivery\Http\Handler\EnqueueEmailHandler;
 use Maatify\ChannelDelivery\Http\Handler\HealthCheckHandler;
 use Maatify\ChannelDelivery\Http\Middleware\ApiKeyMiddleware;
+use Maatify\ChannelDelivery\Http\Middleware\RateLimitMiddleware;
 use Psr\Container\ContainerInterface;
 use Slim\App;
 use Slim\Factory\AppFactory;
@@ -35,7 +36,13 @@ final class Application
         // ── Protected (API Key + IP whitelist) ────────────────
         $app->group('/api/v1', function ($group): void {
             $group->post('/email/enqueue', EnqueueEmailHandler::class);
-        })->add(ApiKeyMiddleware::class);
+            // Middleware chain (outermost = last executed):
+            // Request → RateLimitMiddleware → ApiKeyMiddleware → Handler
+            // ApiKeyMiddleware runs first (innermost) so RateLimitMiddleware
+            // can identify the key via request attribute for per-key limiting.
+        })
+            ->add(RateLimitMiddleware::class)
+            ->add(ApiKeyMiddleware::class);
 
         return $app;
     }

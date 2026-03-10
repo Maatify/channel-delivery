@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Maatify\ChannelDelivery\Http\Middleware;
 
-use Maatify\ChannelDelivery\ApiKey\ApiKeyRepository;
+use Maatify\ChannelDelivery\ApiKey\ApiKeyRepositoryInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -28,7 +28,7 @@ final readonly class ApiKeyMiddleware implements MiddlewareInterface
      *   TRUSTED_PROXIES=                           ← no proxy (direct)
      */
     public function __construct(
-        private ApiKeyRepository         $repository,
+        private ApiKeyRepositoryInterface $repository,
         private ResponseFactoryInterface $responseFactory,
         private array                    $trustedProxies = [],
     ) {

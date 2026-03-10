@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use DI\ContainerBuilder;
-
 use Maatify\PsrLogger\LoggerFactory;
 use Psr\Log\LoggerInterface;
 
@@ -42,8 +41,7 @@ $builder->addDefinitions([
 $builder->addDefinitions(require __DIR__ . '/dependencies/crypto.php');
 $builder->addDefinitions(require __DIR__ . '/dependencies/email_delivery.php');
 $builder->addDefinitions(require __DIR__ . '/dependencies/api_key.php');
-
-
+$builder->addDefinitions(require __DIR__ . '/dependencies/redis.php');
 
 // Future channels:
 // $builder->addDefinitions(require __DIR__ . '/dependencies/telegram_delivery.php');

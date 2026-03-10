@@ -7,7 +7,7 @@ namespace Maatify\ChannelDelivery\ApiKey;
 use Maatify\ChannelDelivery\ApiKey\DTO\ApiKeyDTO;
 use PDO;
 
-final readonly class ApiKeyRepository
+final readonly class ApiKeyRepository implements ApiKeyRepositoryInterface
 {
     private const TABLE = 'cd_api_keys';
 
@@ -22,7 +22,7 @@ final readonly class ApiKeyRepository
         $table = self::TABLE;
 
         $stmt = $this->pdo->prepare(
-            "SELECT id, name, key_hash, ip_whitelist, is_active
+            "SELECT id, name, key_hash, ip_whitelist, is_active, last_used_at
              FROM `{$table}`
              WHERE key_hash = :hash
                AND is_active = 1
@@ -31,7 +31,7 @@ final readonly class ApiKeyRepository
 
         $stmt->execute(['hash' => $hash]);
 
-        /** @var array{id: int|string, name: string, key_hash: string, ip_whitelist: string, is_active: int|string}|false $row */
+        /** @var array{id: int|string, name: string, key_hash: string, ip_whitelist: string, is_active: int|string, last_used_at: string|null}|false $row */
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row === false) {
@@ -41,12 +41,17 @@ final readonly class ApiKeyRepository
         /** @var list<string> $ipWhitelist */
         $ipWhitelist = json_decode($row['ip_whitelist'], true) ?? [];
 
+        $lastUsedAt = isset($row['last_used_at'])
+            ? new \DateTimeImmutable($row['last_used_at'])
+            : null;
+
         return new ApiKeyDTO(
             id:          (int) $row['id'],
             name:        $row['name'],
             keyHash:     $row['key_hash'],
             ipWhitelist: $ipWhitelist,
             isActive:    (bool) $row['is_active'],
+            lastUsedAt:  $lastUsedAt,
         );
     }
 
