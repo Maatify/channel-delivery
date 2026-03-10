@@ -10,11 +10,12 @@ final readonly class ApiKeyDTO
      * @param list<string> $ipWhitelist
      */
     public function __construct(
-        public int    $id,
-        public string $name,
-        public string $keyHash,
-        public array  $ipWhitelist,
-        public bool   $isActive,
+        public int                   $id,
+        public string                $name,
+        public string                $keyHash,
+        public array                 $ipWhitelist,
+        public bool                  $isActive,
+        public ?\DateTimeImmutable   $lastUsedAt = null,
     ) {
     }
 }

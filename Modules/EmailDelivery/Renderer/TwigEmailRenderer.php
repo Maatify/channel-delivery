@@ -20,18 +20,33 @@ class TwigEmailRenderer implements EmailRendererInterface
      *   Variables injected into every template automatically.
      *   Use for app-wide values like app_name, support_email, base_url.
      *   Callers do NOT need to pass these in the payload context.
+     * @param string|false|null $cachePath
+     *   Path to the Twig cache directory.
+     *   - string: explicit path (used as-is)
+     *   - null:   auto — enabled in production, disabled otherwise
+     *   - false:  always disabled (useful in tests)
      */
-    public function __construct(?string $templateDir = null, array $globals = [])
-    {
-        // Calculate path to templates directory: root/templates
-        // Current file: app/Modules/Email/Renderer/TwigEmailRenderer.php
-        // Depth: 4 (app/Modules/Email/Renderer)
-        $templateDir = $templateDir ?? (dirname(__DIR__, 4) . '/templates');
+    public function __construct(
+        ?string          $templatesPath = null,
+        array            $globals       = [],
+        string|false|null $cachePath    = null,
+    ) {
+        $templatesPath = $templatesPath ?? (dirname(__DIR__, 4) . '/templates');
 
-        $loader = new FilesystemLoader($templateDir);
+        // Auto-detect cache: enable in production, disable in dev/test.
+        // Caching Twig templates avoids disk reads on every render,
+        // which is critical for performance under high email volume.
+        if ($cachePath === null) {
+            $env       = $_ENV['APP_ENV'] ?? 'production';
+            $cachePath = $env === 'production'
+                ? dirname(__DIR__, 4) . '/var/cache/twig'
+                : false;
+        }
+
+        $loader     = new FilesystemLoader($templatesPath);
         $this->twig = new Environment($loader, [
             'strict_variables' => true,
-            'cache' => false, // Ensure no caching issues in this environment
+            'cache'            => $cachePath,
         ]);
 
         foreach ($globals as $key => $value) {
@@ -44,33 +59,33 @@ class TwigEmailRenderer implements EmailRendererInterface
         string $language,
         EmailPayloadInterface $payload
     ): RenderedEmailDTO {
-        // Enforce path: templates/emails/{templateKey}/{language}.twig
-        // Loader is at templates/, so relative path is emails/...
         $templatePath = sprintf('emails/%s/%s.twig', $templateKey, $language);
-        $data = $payload->toArray();
+        $data         = $payload->toArray();
 
         try {
-            // Load the template explicitly to extract blocks
             $template = $this->twig->load($templatePath);
 
-            // Attempt to render the 'subject' block
             if (!$template->hasBlock('subject')) {
-                throw new EmailRenderException("Template '{$templatePath}' is missing required block 'subject'.");
+                throw new EmailRenderException(
+                    "Template '{$templatePath}' is missing required block 'subject'."
+                );
             }
 
             $subject = trim($template->renderBlock('subject', $data));
+
             if ($subject === '') {
-                throw new EmailRenderException("Subject block in '{$templatePath}' rendered empty string.");
+                throw new EmailRenderException(
+                    "Subject block in '{$templatePath}' rendered empty string."
+                );
             }
 
-            // Render the full body (which includes the layout via extends)
             $htmlBody = $template->render($data);
 
             return new RenderedEmailDTO(
-                subject: $subject,
-                htmlBody: $htmlBody,
+                subject:     $subject,
+                htmlBody:    $htmlBody,
                 templateKey: $templateKey,
-                language: $language
+                language:    $language
             );
 
         } catch (EmailRenderException $e) {

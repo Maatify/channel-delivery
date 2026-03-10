@@ -29,10 +29,12 @@ final readonly class EnqueueEmailHandler
         }
 
         // ── 2. Validate required fields ───────────────────────
+        // NOTE: empty() is intentionally avoided — it would reject integer 0
+        // which is a valid value for sender_type and priority.
         $missing = [];
 
         foreach (['entity_type', 'recipient', 'template_key', 'language', 'sender_type'] as $field) {
-            if (empty($body[$field])) {
+            if (!isset($body[$field]) || $body[$field] === '') {
                 $missing[] = $field;
             }
         }
