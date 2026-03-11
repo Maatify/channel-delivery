@@ -31,17 +31,13 @@ class TwigEmailRenderer implements EmailRendererInterface
         array            $globals       = [],
         string|false|null $cachePath    = null,
     ) {
-        $root = getcwd() ?: '.';
-        $templatesPath = $templatesPath ?? ($root . '/templates');
+        $templatesPath = $templatesPath ?? (getcwd() . '/templates');
 
         // Auto-detect cache: enable in production, disable in dev/test.
         // Caching Twig templates avoids disk reads on every render,
         // which is critical for performance under high email volume.
         if ($cachePath === null) {
-            $env       = $_ENV['APP_ENV'] ?? 'production';
-            $cachePath = $env === 'production'
-                ? $root . '/var/cache/twig'
-                : false;
+            $cachePath = getcwd() . '/var/cache/twig';
         }
 
         $loader     = new FilesystemLoader($templatesPath);
