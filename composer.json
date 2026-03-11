@@ -12,10 +12,9 @@
     "ext-redis": "*",
     "ext-sodium": "*",
     "ext-zlib": "*",
-
+    "maatify/crypto": "^1.0",
     "maatify/psr-logger": "^1.0",
     "maatify/shared-common": "^1.0",
-
     "php-di/php-di": "^7.1",
     "php-di/slim-bridge": "^3.0",
     "phpmailer/phpmailer": "^6.9",
@@ -36,7 +35,6 @@
   "autoload": {
     "psr-4": {
       "Maatify\\ChannelDelivery\\": "src/",
-      "Maatify\\Crypto\\": "Modules/Crypto/",
       "Maatify\\EmailDelivery\\": "Modules/EmailDelivery/"
     }
   },
