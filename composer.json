@@ -9,9 +9,13 @@
     "ext-json": "*",
     "ext-openssl": "*",
     "ext-pdo": "*",
+    "ext-redis": "*",
     "ext-sodium": "*",
     "ext-zlib": "*",
+
     "maatify/psr-logger": "^1.0",
+    "maatify/shared-common": "^1.0",
+
     "php-di/php-di": "^7.1",
     "php-di/slim-bridge": "^3.0",
     "phpmailer/phpmailer": "^6.9",
@@ -22,8 +26,7 @@
     "slim/psr7": "^1.8",
     "slim/slim": "^4.15",
     "twig/twig": "^3.0",
-    "vlucas/phpdotenv": "^5.6",
-    "ext-redis": "*"
+    "vlucas/phpdotenv": "^5.6"
   },
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.94",
@@ -33,7 +36,6 @@
   "autoload": {
     "psr-4": {
       "Maatify\\ChannelDelivery\\": "src/",
-      "Maatify\\SharedCommon\\": "Modules/SharedCommon/",
       "Maatify\\Crypto\\": "Modules/Crypto/",
       "Maatify\\EmailDelivery\\": "Modules/EmailDelivery/"
     }
