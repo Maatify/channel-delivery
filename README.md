@@ -60,12 +60,16 @@ Applications enqueue notification jobs via HTTP. Workers then process the queue 
 
 ![Architecture Diagram](docs/assets/architecture-diagram.svg)
 
+The email delivery pipeline is powered internally by the
+[`maatify/email-delivery`](https://github.com/Maatify/email-delivery)
+library, which provides the rendering, transport abstraction,
+and delivery engine.
+
 ---
 
 ## Email Delivery Pipeline
 
 ```
-
 Client Application
 ↓
 Channel Delivery API
@@ -114,6 +118,12 @@ Detailed processing steps:
 
 ---
 
+## Related Projects
+- [`maatify/email-delivery`](https://github.com/Maatify/email-delivery) – email delivery engine
+- [`maatify/crypto`](https://github.com/Maatify/crypto) – encryption layer
+
+---
+
 ## Installation
 
 Clone the repository or install via Composer:
@@ -121,7 +131,7 @@ Clone the repository or install via Composer:
 ```bash
 composer create-project maatify/channel-delivery
 cd channel-delivery
-````
+```
 
 Install dependencies:
 
@@ -195,11 +205,30 @@ Key requirements:
 * Keys support **rotation**
 * Old keys remain for **decryption only**
 
-Generate a secure key:
+Generate a secure 32-byte key:
 
 ```bash
-php -r "echo random_bytes(32);" > key.bin
+php -r "echo bin2hex(random_bytes(16));"
 ```
+
+This will generate a **32-character string**, for example:
+
+```
+a3f9c2d1e4b5f6a7c8d9e0f1a2b3c4d5
+```
+
+Then place it inside the `.env` configuration:
+
+```env
+CRYPTO_ACTIVE_KEY_ID=v1
+CRYPTO_KEYS='[{"id":"v1","key":"a3f9c2d1e4b5f6a7c8d9e0f1a2b3c4d5"}]'
+```
+
+Key requirements:
+
+* Must be **exactly 32 characters**
+* Used as the symmetric encryption key for AES-256-GCM
+* Keys support **rotation**
 
 ---
 
