@@ -47,7 +47,7 @@
   },
   "scripts": {
     "test": "phpunit",
-    "analyse": "phpstan analyse src Modules tests --level=max",
+    "analyse": "phpstan analyse src tests --level=max",
     "format": "php-cs-fixer fix"
   },
   "config": {
