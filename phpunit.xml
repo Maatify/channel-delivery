@@ -2,8 +2,7 @@
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="tests/bootstrap.php"
-         colors="true"
-         stopOnFailure="false">
+         colors="true">
 
     <testsuites>
         <testsuite name="Unit">
@@ -14,7 +13,6 @@
     <source>
         <include>
             <directory>src</directory>
-            <directory>Modules</directory>
         </include>
     </source>
 
