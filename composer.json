@@ -3,6 +3,29 @@
   "description": "Maatify Channel Delivery — Standalone async multi-channel delivery microservice (Email, Telegram, SMS, Push...)",
   "type": "project",
   "license": "MIT",
+  "keywords": [
+    "maatify",
+    "delivery",
+    "email",
+    "sms",
+    "push",
+    "telegram",
+    "async",
+    "queue",
+    "microservice"
+  ],
+  "authors": [
+    {
+      "name": "Mohamed Abdulalim (megyptm)",
+      "email": "mohamed@maatify.dev",
+      "homepage": "https://www.maatify.dev"
+    }
+  ],
+  "homepage": "https://github.com/Maatify/channel-delivery",
+  "support": {
+    "issues": "https://github.com/Maatify/channel-delivery/issues",
+    "source": "https://github.com/Maatify/channel-delivery"
+  },
   "require": {
     "php": "^8.2",
     "ext-curl": "*",
