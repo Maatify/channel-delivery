@@ -42,7 +42,7 @@ return [
     // without requiring the caller to pass them in the payload context.
     TwigEmailRenderer::class         => factory(function (): TwigEmailRenderer {
         return new TwigEmailRenderer(
-            templateDir: dirname(__DIR__, 2) . '/templates',
+            templatesPath: dirname(__DIR__, 2) . '/templates',
             globals    : [
                 'app_name'      => (string)($_ENV['APP_NAME'] ?? 'App'),
                 'support_email' => (string)($_ENV['SUPPORT_EMAIL'] ?? ''),
