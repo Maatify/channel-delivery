@@ -60,12 +60,16 @@ Applications enqueue notification jobs via HTTP. Workers then process the queue 
 
 ![Architecture Diagram](docs/assets/architecture-diagram.svg)
 
+The email delivery pipeline is powered internally by the
+[`maatify/email-delivery`](https://github.com/Maatify/email-delivery)
+library, which provides the rendering, transport abstraction,
+and delivery engine.
+
 ---
 
 ## Email Delivery Pipeline
 
 ```
-
 Client Application
 ↓
 Channel Delivery API
@@ -114,6 +118,12 @@ Detailed processing steps:
 
 ---
 
+## Related Projects
+- [`maatify/email-delivery`](https://github.com/Maatify/email-delivery) – email delivery engine
+- [`maatify/crypto`](https://github.com/Maatify/crypto) – encryption layer
+
+---
+
 ## Installation
 
 Clone the repository or install via Composer:
@@ -121,7 +131,7 @@ Clone the repository or install via Composer:
 ```bash
 composer create-project maatify/channel-delivery
 cd channel-delivery
-````
+```
 
 Install dependencies:
 
