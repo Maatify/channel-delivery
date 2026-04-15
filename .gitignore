@@ -33,3 +33,5 @@ Thumbs.db
 
 # Twig cache (if enabled in production)
 /var/cache/
+
+/internals/
