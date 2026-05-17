@@ -38,6 +38,9 @@ Additional channels such as **SMS, Telegram, and Push notifications** are planne
 - **Template Rendering**
   Uses **Twig** to render dynamic email templates safely.
 
+- **Reply-To Support**
+  Optional `reply_to` field for admin notification emails — email goes to the admin, replies go to the customer.
+
 - **Robust Delivery**
   Exponential retry strategy for transient delivery failures.
 
@@ -102,7 +105,7 @@ Detailed processing steps:
    Context is decrypted and injected into Twig templates.
 
 6. **SMTP Delivery**
-   Email is sent via `SmtpEmailTransport`.
+   Email is sent via `SmtpEmailTransport`. If `replyTo` was set, a `Reply-To` header is added so replies go to the specified address.
 
 ![Email Flow Diagram](docs/assets/email-flow-diagram.svg)
 
@@ -275,17 +278,11 @@ RATE_LIMIT_WINDOW_SECONDS=60
 
 ---
 
-## Quick Example
+## Quick Examples
 
-Enqueue an email using the provided script:
+### Customer-facing email
 
-```bash
-export CD_BASE_URL=http://localhost:8080
-export CD_API_KEY=your_generated_api_key
-php scripts/test_enqueue.php
-```
-
-Or via cURL:
+Enqueue a transactional email (e.g., welcome, OTP, verification) sent **to the customer**:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/email/enqueue \
@@ -296,7 +293,34 @@ curl -X POST http://localhost:8080/api/v1/email/enqueue \
     "recipient": "user@example.com",
     "template_key": "welcome",
     "language": "en",
-    "sender_type": 1
+    "sender_type": 1,
+    "context": {
+      "user_name": "Ahmed",
+      "activation_link": "https://example.com/activate?token=abc"
+    }
+  }'
+```
+
+### Admin notification with Reply-To (v1.1.0+)
+
+Enqueue an admin notification where the email goes **to the admin**, and replies go **to the customer**:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/email/enqueue \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: your_generated_api_key" \
+  -d '{
+    "entity_type": "contact_form",
+    "recipient": "admin@example.com",
+    "reply_to": "customer@example.com",
+    "template_key": "admin_notification",
+    "language": "en",
+    "sender_type": 1,
+    "context": {
+      "customer_name": "Ahmed",
+      "customer_email": "customer@example.com",
+      "customer_message": "I need help with my account."
+    }
   }'
 ```
 

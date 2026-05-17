@@ -62,6 +62,9 @@ final readonly class EnqueueEmailHandler
         $language    = $body['language'];
         $senderType  = (int) $body['sender_type'];
         $priority    = isset($body['priority']) && is_numeric($body['priority']) ? (int) $body['priority'] : 5;
+        $replyTo     = isset($body['reply_to']) && is_string($body['reply_to']) && $body['reply_to'] !== ''
+            ? $body['reply_to']
+            : null;
 
         /** @var array<string, mixed> $context */
         $context = isset($body['context']) && is_array($body['context'])
@@ -70,6 +73,10 @@ final readonly class EnqueueEmailHandler
 
         if (filter_var($recipient, FILTER_VALIDATE_EMAIL) === false) {
             return $this->error($response, 422, 'validation_error', 'Invalid recipient email address.');
+        }
+
+        if ($replyTo !== null && filter_var($replyTo, FILTER_VALIDATE_EMAIL) === false) {
+            return $this->error($response, 422, 'validation_error', 'Invalid reply_to email address.');
         }
 
         if ($priority < 1 || $priority > 10) {
@@ -85,6 +92,7 @@ final readonly class EnqueueEmailHandler
                 context:     $context,
                 templateKey: $templateKey,
                 language:    $language,
+                replyTo:     $replyTo,
             ),
             senderType:  $senderType,
             priority:    $priority,

@@ -16,6 +16,7 @@ Enqueues a new email message for background delivery.
 | `entity_type` | string | Yes | The type of entity triggering the email, for example `user`, `customer`, or `admin`. |
 | `entity_id` | string | No | Optional ID associated with the entity. |
 | `recipient` | string | Yes | Recipient email address. Must be a valid email. |
+| `reply_to` | string | No | Reply-To email address. When set, the email's Reply-To header is set to this address so replies go to a different address than the recipient (e.g., customer email for admin notifications). Must be a valid email if provided. |
 | `template_key` | string | Yes | Email template key. Must match an available template. |
 | `language` | string | Yes | Template language code. Currently supported by existing templates: `ar`, `en`. |
 | `sender_type` | int \\| float | Yes | Numeric sender type value required by the service contract. |
@@ -59,8 +60,9 @@ Currently available templates:
 * `otp`
 * `verification`
 * `welcome`
+* `admin_notification`
 
-Currently supported languages for these templates:
+Currently supported languages for these templates: 
 
 * `ar`
 * `en`
@@ -90,6 +92,19 @@ Required context fields:
 
 * `user_name`
 * `activation_link`
+
+#### `admin_notification`
+
+Required context fields:
+
+* `customer_name`
+* `customer_email`
+* `customer_message`
+
+Optional context fields:
+
+* `customer_phone`
+* `form_subject`
 
 Automatically injected template globals:
 

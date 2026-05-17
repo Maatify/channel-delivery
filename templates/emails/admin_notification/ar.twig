@@ -1,0 +1,24 @@
+{% extends "emails/layouts/base.twig" %}
+
+{% block subject %}استفسار جديد من {{ customer_name }}{% endblock %}
+
+{% block body %}
+    <div dir="rtl" style="text-align: right;">
+        <h2>رسالة جديدة من نموذج الاتصال</h2>
+        <p><strong>من:</strong> {{ customer_name }} &lt;{{ customer_email }}&gt;</p>
+        {% if form_subject is defined and form_subject is not empty %}
+            <p><strong>الموضوع:</strong> {{ form_subject }}</p>
+        {% endif %}
+        {% if customer_phone is defined and customer_phone is not empty %}
+            <p><strong>الهاتف:</strong> {{ customer_phone }}</p>
+        {% endif %}
+        <p><strong>الرسالة:</strong></p>
+        <blockquote style="padding: 15px; border-right: 4px solid #007bff; background-color: #f8f9fa; color: #333; margin: 10px 0;">
+            {{ customer_message }}
+        </blockquote>
+        <hr>
+        <p style="color: #888; font-size: 12px;">
+            قم بالرد على هذا البريد للتواصل مباشرة مع العميل.
+        </p>
+    </div>
+{% endblock %}

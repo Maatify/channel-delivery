@@ -1,0 +1,22 @@
+{% extends "emails/layouts/base.twig" %}
+
+{% block subject %}New Inquiry from {{ customer_name }}{% endblock %}
+
+{% block body %}
+    <h2>New Contact Form Submission</h2>
+    <p><strong>From:</strong> {{ customer_name }} &lt;{{ customer_email }}&gt;</p>
+    {% if form_subject is defined and form_subject is not empty %}
+        <p><strong>Subject:</strong> {{ form_subject }}</p>
+    {% endif %}
+    {% if customer_phone is defined and customer_phone is not empty %}
+        <p><strong>Phone:</strong> {{ customer_phone }}</p>
+    {% endif %}
+    <p><strong>Message:</strong></p>
+    <blockquote style="padding: 15px; border-left: 4px solid #007bff; background-color: #f8f9fa; color: #333; margin: 10px 0;">
+        {{ customer_message }}
+    </blockquote>
+    <hr>
+    <p style="color: #888; font-size: 12px;">
+        Reply to this email to respond directly to the customer.
+    </p>
+{% endblock %}

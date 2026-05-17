@@ -130,6 +130,7 @@ Content-Type: application/json
 | `entity_type`  | string        	|      Yes | Logical owner or subject type, for example `user`, `customer`, or `admin`.     |
 | `entity_id`    | `string | null` 	|       No | Optional identifier of the related entity.                                     |
 | `recipient`    | string        	|      Yes | Recipient email address. Must be a valid email.                                |
+| `reply_to`     | `string | null` |       No | Reply-To email address. When set, the email's Reply-To header is set to this address so replies go to a different address than the recipient (e.g., customer email for admin notifications). Must be a valid email if provided. |
 | `template_key` | string        	|      Yes | Email template identifier. Must match an available template.                   |
 | `language`     | string        	|      Yes | Template language code. Currently supported by existing templates: `ar`, `en`. |
 | `sender_type`  | number        	|      Yes | Numeric sender type value required by the service contract.                    |
@@ -164,6 +165,7 @@ The following fields are required:
 
 * `entity_type` must be a string
 * `recipient` must be a string and valid email address
+* `reply_to` must be a string and valid email address if provided
 * `template_key` must be a string
 * `language` must be a string
 * `sender_type` must be numeric
@@ -288,6 +290,7 @@ The following templates are currently available:
 * `otp`
 * `verification`
 * `welcome`
+* `admin_notification`
 
 Supported languages for current templates:
 
@@ -409,6 +412,52 @@ Welcome email with account activation link.
   "context": {
     "user_name": "Ahmed",
     "activation_link": "https://example.com/activate?token=abc123"
+  }
+}
+```
+
+---
+
+## Template Contract: `admin_notification`
+
+### Purpose
+
+Admin notification email, typically triggered by a contact form or customer inquiry. The email is sent **to the admin**, with the customer's email set as Reply-To so the admin can reply directly to the customer.
+
+### Required Context Fields
+
+| Field             | Type   | Description                        |
+| ----------------- | ------ | ---------------------------------- |
+| `customer_name`   | string | Customer display name              |
+| `customer_email`  | string | Customer email address             |
+| `customer_message`| string | Customer message or inquiry body   |
+
+### Optional Context Fields
+
+| Field           | Type   | Description           |
+| --------------- | ------ | --------------------- |
+| `customer_phone`| string | Customer phone number |
+| `form_subject`  | string | Inquiry subject       |
+
+### Example Request
+
+When calling this template, **`recipient`** is the admin's email and **`reply_to`** is the customer's email:
+
+```json
+{
+  "entity_type": "contact_form",
+  "entity_id": "123",
+  "recipient": "admin@example.com",
+  "reply_to": "customer@example.com",
+  "template_key": "admin_notification",
+  "language": "en",
+  "sender_type": 1,
+  "priority": 5,
+  "context": {
+    "customer_name": "Ahmed",
+    "customer_email": "customer@example.com",
+    "customer_message": "Hello, I need help with my account.",
+    "form_subject": "Account Support"
   }
 }
 ```

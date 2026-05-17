@@ -99,6 +99,71 @@ final class EnqueueEmailHandlerTest extends TestCase
         $this->assertSame(202, $response->getStatusCode());
     }
 
+    // ── Reply-To validation ──────────────────────────────────
+
+    #[Test]
+    public function testValidReplyToIsAccepted(): void
+    {
+        $this->writer->expects($this->once())->method('enqueue');
+
+        $payload                = $this->validPayload();
+        $payload['recipient']   = 'admin@example.com';
+        $payload['reply_to']    = 'customer@example.com';
+
+        $response = ($this->handler)(
+            $this->makeRequest($payload),
+            $this->makeResponse()
+        );
+
+        $this->assertSame(202, $response->getStatusCode());
+    }
+
+    #[Test]
+    public function testMissingReplyToIsStillAccepted(): void
+    {
+        $this->writer->expects($this->once())->method('enqueue');
+
+        $response = ($this->handler)(
+            $this->makeRequest($this->validPayload()),
+            $this->makeResponse()
+        );
+
+        $this->assertSame(202, $response->getStatusCode());
+    }
+
+    #[Test]
+    public function testInvalidReplyToReturns422(): void
+    {
+        $this->writer->expects($this->never())->method('enqueue');
+
+        $payload               = $this->validPayload();
+        $payload['reply_to']   = 'not-an-email';
+
+        $response = ($this->handler)(
+            $this->makeRequest($payload),
+            $this->makeResponse()
+        );
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('reply_to', (string) $response->getBody());
+    }
+
+    #[Test]
+    public function testEmptyStringReplyToIsTreatedAsMissing(): void
+    {
+        $this->writer->expects($this->once())->method('enqueue');
+
+        $payload               = $this->validPayload();
+        $payload['reply_to']   = '';
+
+        $response = ($this->handler)(
+            $this->makeRequest($payload),
+            $this->makeResponse()
+        );
+
+        $this->assertSame(202, $response->getStatusCode());
+    }
+
     #[Test]
     public function testMissingSenderTypeReturns422(): void
     {
