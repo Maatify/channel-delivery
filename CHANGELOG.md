@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- F8-01: reject ambiguous numeric-keyed and empty nested JSON objects before associative conversion, with raw HTTP regression tests; preserve named objects and lists.
+
+### Added
+- v2 atomic email acceptance and authenticated receipt lookup via email-delivery1.2.0.
+- Stable operator-owned consumer bindings and explicit canonical vendor migrations.
+- Real HTTP/MySQL/Redis integration, uncertain-commit recovery and multiprocess lock-contention tests.
+
+### Changed
+- Project runtime PHP8.4+, CI8.4/8.5, committed Composer lock; library compatibility remains unchanged.
+- APP_DEBUG textual false disables response exception details (channel-delivery#7).
+- Legacy v1 behavior and mail policy retained; no synthetic HTTP endpoint.
+
 ## [1.1.0] - 2026-05-17
 
 ### Added

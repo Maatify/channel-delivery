@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+use Maatify\ChannelDelivery\Email\AtomicEmailConnectionFactory;
+use Maatify\ChannelDelivery\Email\AtomicEmailGateway;
+use Maatify\ChannelDelivery\Email\ConsumerNamespaceRepositoryInterface;
+use Maatify\ChannelDelivery\Email\PdoConsumerNamespaceRepository;
+use Maatify\EmailDelivery\Queue\IdempotentEmailQueueWriterInterface;
+use Maatify\EmailDelivery\Queue\EmailEnqueueReceiptReaderInterface;
 use Maatify\EmailDelivery\Config\EmailTransportConfigDTO;
 use Maatify\EmailDelivery\Queue\EmailQueueWriterInterface;
 use Maatify\EmailDelivery\Queue\PdoEmailQueueWriter;
@@ -54,6 +60,23 @@ return [
     // ── Queue Writer ──────────────────────────────────────────
     PdoEmailQueueWriter::class       => autowire(PdoEmailQueueWriter::class),
     EmailQueueWriterInterface::class => get(PdoEmailQueueWriter::class),
+
+    // v2 owns a separate UTC session. Never change the clock/transaction of legacy PDO::class.
+    AtomicEmailConnectionFactory::class => factory(function (): AtomicEmailConnectionFactory {
+        return new AtomicEmailConnectionFactory(static function (): PDO {
+            $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+                $_ENV['DB_HOST'] ?? '127.0.0.1', $_ENV['DB_PORT'] ?? '3306', $_ENV['DB_DATABASE'] ?? 'channel_delivery');
+            $pdo = new PDO($dsn, $_ENV['DB_USERNAME'], $_ENV['DB_PASSWORD'], [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+            $pdo->exec("SET SESSION time_zone = '+00:00'");
+            return $pdo;
+        });
+    }),
+    AtomicEmailGateway::class => autowire(AtomicEmailGateway::class),
+    IdempotentEmailQueueWriterInterface::class => get(AtomicEmailGateway::class),
+    EmailEnqueueReceiptReaderInterface::class => get(AtomicEmailGateway::class),
+    ConsumerNamespaceRepositoryInterface::class => autowire(PdoConsumerNamespaceRepository::class),
 
     // ── Worker ────────────────────────────────────────────────
     // LoggerInterface is resolved from the container (defined in crypto.php).

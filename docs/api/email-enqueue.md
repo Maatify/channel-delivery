@@ -1,5 +1,8 @@
 # API Reference: Email Enqueue
 
+For keyed atomic acceptance and receipt recovery, see the additive [v2 contract](../api/email-atomic.md). The v1 examples below retain legacy per-call inserts.
+
+
 `POST /api/v1/email/enqueue`
 
 Enqueues a new email message for background delivery.

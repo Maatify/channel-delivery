@@ -36,8 +36,6 @@ Thumbs.db
 /scripts/var/
 
 /internals/
-composer.lock
 llm
 *.patch
-.gitignore
 LocalServerRun.md

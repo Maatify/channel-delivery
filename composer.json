@@ -1,6 +1,6 @@
 {
   "name": "maatify/channel-delivery",
-  "description": "Maatify Channel Delivery — Standalone async multi-channel delivery microservice (Email, Telegram, SMS, Push...)",
+  "description": "Maatify Channel Delivery \u2014 Standalone async multi-channel delivery microservice (Email, Telegram, SMS, Push...)",
   "type": "project",
   "license": "MIT",
   "keywords": [
@@ -27,7 +27,7 @@
     "source": "https://github.com/Maatify/channel-delivery"
   },
   "require": {
-    "php": "^8.2",
+    "php": "^8.4",
     "ext-curl": "*",
     "ext-json": "*",
     "ext-openssl": "*",
@@ -35,12 +35,10 @@
     "ext-redis": "*",
     "ext-sodium": "*",
     "ext-zlib": "*",
-
     "maatify/crypto": "^1.0",
-    "maatify/email-delivery": "^1.0",
+    "maatify/email-delivery": "^1.2",
     "maatify/psr-logger": "^1.0",
     "maatify/shared-common": "^1.0",
-
     "php-di/php-di": "^7.1",
     "php-di/slim-bridge": "^3.0",
     "phpmailer/phpmailer": "^6.9",
@@ -70,14 +68,14 @@
   },
   "scripts": {
     "test": "phpunit",
-    "analyse": "phpstan analyse src tests --level=max",
+    "analyse": "phpstan analyse src tests config/dependencies/email_delivery.php --level=max",
     "format": "php-cs-fixer fix"
   },
   "config": {
     "optimize-autoloader": true,
     "sort-packages": true,
     "platform": {
-      "php": "8.2.0"
+      "php": "8.4.0"
     }
   },
   "minimum-stability": "stable",
