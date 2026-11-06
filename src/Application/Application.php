@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Maatify\ChannelDelivery\Application;
 
 use Maatify\ChannelDelivery\Http\Handler\EnqueueEmailHandler;
+use Maatify\ChannelDelivery\Http\Handler\AtomicEmailHandler;
+use Maatify\ChannelDelivery\Http\Middleware\AtomicEmailBodyLimitMiddleware;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Maatify\ChannelDelivery\Http\Handler\HealthCheckHandler;
 use Maatify\ChannelDelivery\Http\Middleware\ApiKeyMiddleware;
 use Maatify\ChannelDelivery\Http\Middleware\RateLimitMiddleware;
@@ -24,11 +27,16 @@ final class Application
 
         $app->addBodyParsingMiddleware();
         $app->addRoutingMiddleware();
+        $responses = $container->get(ResponseFactoryInterface::class);
+        if (!$responses instanceof ResponseFactoryInterface) {
+            throw new \RuntimeException('Response factory binding is invalid.');
+        }
         $app->addErrorMiddleware(
-            displayErrorDetails: (bool) ($_ENV['APP_DEBUG'] ?? false),
+            displayErrorDetails: filter_var($_ENV['APP_DEBUG'] ?? false, FILTER_VALIDATE_BOOL),
             logErrors:           true,
             logErrorDetails:     true,
         );
+        $app->add(new AtomicEmailBodyLimitMiddleware($responses));
 
         // ── Public ────────────────────────────────────────────
         $app->get('/health', HealthCheckHandler::class);
@@ -40,6 +48,13 @@ final class Application
             // Request → RateLimitMiddleware → ApiKeyMiddleware → Handler
             // ApiKeyMiddleware runs first (innermost) so RateLimitMiddleware
             // can identify the key via request attribute for per-key limiting.
+        })
+            ->add(RateLimitMiddleware::class)
+            ->add(ApiKeyMiddleware::class);
+
+        $app->group('/api/v2', function ($group): void {
+            $group->post('/email/enqueue', AtomicEmailHandler::class);
+            $group->get('/email/receipt', [AtomicEmailHandler::class, 'receipt']);
         })
             ->add(RateLimitMiddleware::class)
             ->add(ApiKeyMiddleware::class);

@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: [ "8.2", "8.3", "8.4" ]
+        php: [ "8.4", "8.5" ]
 
     # -------------------------------------------------
     # MySQL Service Container
@@ -88,7 +88,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           tools: composer
-          extensions: redis
+          extensions: redis, pdo_mysql
           coverage: none
 
       # -------------------------------------------------
@@ -99,8 +99,7 @@ jobs:
         with:
           path: |
             ~/.cache/composer
-            vendor
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-${{ matrix.php }}-composer-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-composer-
 
@@ -135,10 +134,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y mysql-client
-          for i in {1..20}; do
+          for _ in {1..20}; do
             mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" && break
             sleep 2
           done
+          mysqladmin ping -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS"
 
       # -------------------------------------------------
       # 9) Create Test Database + Run Migrations
@@ -173,13 +173,26 @@ jobs:
             -p"$DB_PASS" \
             "$DB_NAME" < migrations/003_optimize_worker_poll_index.sql
 
+      - name: Apply additive v2 schemas from service and installed package
+        run: |
+          for migration in migrations/004_create_email_consumer_bindings.sql \
+            vendor/maatify/email-delivery/schema/mysql/002_email_enqueue_receipts.sql \
+            vendor/maatify/email-delivery/schema/mysql/003_email_queue_receipt_binding.sql; do
+            mysql --protocol=tcp -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$migration"
+          done
+
       # -------------------------------------------------
       # 10) Run PHPUnit (Unit Tests)
       # -------------------------------------------------
       # Crypto key material must be exactly 32 bytes.
       # "12345678901234567890123456789012" = 32 ASCII chars.
-      - name: Run PHPUnit
+      - name: Run PHPUnit (required real HTTP, MySQL, Redis and concurrency)
         env:
+          CHANNEL_IT_REQUIRED: "1"
+          CHANNEL_IT_DSN: "mysql:host=127.0.0.1;port=3306;dbname=channel_delivery_test;charset=utf8mb4"
+          CHANNEL_IT_USER: root
+          CHANNEL_IT_PASS: root
+          CHANNEL_IT_REDIS_HOST: "127.0.0.1"
           APP_ENV: testing
           APP_DEBUG: "false"
           APP_NAME: "channel-delivery-ci"
@@ -232,5 +245,5 @@ jobs:
       # -------------------------------------------------
       - name: Lint PHP files
         run: |
-          find ./src ./tests -type f -name "*.php" -print0 \
+          find ./src ./tests ./config -type f -name "*.php" -print0 \
             | xargs -0 -n1 php -l

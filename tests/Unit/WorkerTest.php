@@ -33,7 +33,12 @@ final class WorkerTest extends TestCase
 
         $statementMock = $this->createMock(\PDOStatement::class);
         $statementMock->method('fetchAll')->willReturn([]);
+        $statementMock->method('columnCount')->willReturn(1);
+        $statementMock->method('getColumnMeta')->willReturn(['name' => 'id']);
+        $pdoMock->expects($this->once())->method('query')->with($this->stringContains('LIMIT 0'))->willReturn($statementMock);
         $pdoMock->method('prepare')->willReturn($statementMock);
+        $pdoMock->expects($this->once())->method('commit')->willReturn(true);
+        $pdoMock->expects($this->never())->method('rollBack');
         $pdoMock->method('beginTransaction')->willReturn(true);
 
         $workerMock = new EmailQueueWorker(
@@ -46,6 +51,7 @@ final class WorkerTest extends TestCase
         );
 
         $loggerMock = $this->createMock(LoggerInterface::class);
+        $loggerMock->expects($this->never())->method('error');
         $loggerMock->expects($this->exactly(3)) // start, processed, finished
             ->method('info');
 

@@ -1,5 +1,8 @@
 # Channel Delivery API Documentation
 
+For keyed atomic acceptance and receipt recovery, see the additive [v2 contract](api/email-atomic.md). The v1 examples below retain legacy per-call inserts.
+
+
 ## Overview
 
 This document defines the current public HTTP contract for the Channel Delivery email enqueue service.

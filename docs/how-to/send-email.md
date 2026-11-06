@@ -1,5 +1,8 @@
 # How to Send an Email
 
+For keyed atomic acceptance and receipt recovery, see the additive [v2 contract](../api/email-atomic.md). The v1 examples below retain legacy per-call inserts.
+
+
 This guide explains how to enqueue an email using the Channel Delivery API.
 
 ## Pre-requisites

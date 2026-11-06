@@ -27,6 +27,11 @@ Additional channels such as **SMS, Telegram, and Push notifications** are planne
 
 ---
 
+Atomic keyed acceptance and receipt lookup are available through the additive
+[v2 HTTP API](docs/api/email-atomic.md), using email-delivery 1.2.0.
+Follow the [schema/binding rollout](docs/how-to/atomic-email-rollout.md) before enabling v2.
+v1 keeps its existing behavior.
+
 ## Features
 
 - **Async Multi-Channel Queue**
@@ -113,7 +118,7 @@ Detailed processing steps:
 
 ## Requirements
 
-- PHP **8.2+**
+- PHP **8.4+** (CI: 8.4 and 8.5)
 - MySQL / MariaDB
 - Redis
 - SMTP server
