@@ -8,6 +8,9 @@ All notable changes to this project will be documented in this file.
 - F8-01: reject ambiguous numeric-keyed and empty nested JSON objects before associative conversion, with raw HTTP regression tests; preserve named objects and lists.
 
 ### Added
+- Optional authenticated POST /api/v2/email/synthetic via the package's isolated no-send store (#5).
+- Explicit retention configuration and trusted bounded purge CLI, with no automatic cron or production SQL.
+- Shared v2 body validation, worker-isolation, concurrency, failure-recovery and cleanup integration tests; optional loopback timing smoke measurement.
 - v2 atomic email acceptance and authenticated receipt lookup via email-delivery1.2.0.
 - Stable operator-owned consumer bindings and explicit canonical vendor migrations.
 - Real HTTP/MySQL/Redis integration, uncertain-commit recovery and multiprocess lock-contention tests.

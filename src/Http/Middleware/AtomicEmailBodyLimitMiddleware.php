@@ -24,7 +24,7 @@ final readonly class AtomicEmailBodyLimitMiddleware implements MiddlewareInterfa
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        if (!in_array($request->getUri()->getPath(), ['/api/v2/email/enqueue', '/api/v2/email/receipt'], true)) {
+        if (!in_array($request->getUri()->getPath(), ['/api/v2/email/enqueue', '/api/v2/email/receipt', '/api/v2/email/synthetic'], true)) {
             return $handler->handle($request);
         }
         try {

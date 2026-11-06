@@ -1,5 +1,8 @@
 # How to Send an Email
 
+Optional [synthetic recording](../api/email-synthetic.md) is a separate trusted no-send endpoint; it never enqueues email.
+
+
 For keyed atomic acceptance and receipt recovery, see the additive [v2 contract](../api/email-atomic.md). The v1 examples below retain legacy per-call inserts.
 
 

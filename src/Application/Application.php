@@ -6,6 +6,7 @@ namespace Maatify\ChannelDelivery\Application;
 
 use Maatify\ChannelDelivery\Http\Handler\EnqueueEmailHandler;
 use Maatify\ChannelDelivery\Http\Handler\AtomicEmailHandler;
+use Maatify\ChannelDelivery\Http\Handler\SyntheticEmailHandler;
 use Maatify\ChannelDelivery\Http\Middleware\AtomicEmailBodyLimitMiddleware;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Maatify\ChannelDelivery\Http\Handler\HealthCheckHandler;
@@ -54,6 +55,7 @@ final class Application
 
         $app->group('/api/v2', function ($group): void {
             $group->post('/email/enqueue', AtomicEmailHandler::class);
+            $group->post('/email/synthetic', SyntheticEmailHandler::class);
             $group->get('/email/receipt', [AtomicEmailHandler::class, 'receipt']);
         })
             ->add(RateLimitMiddleware::class)

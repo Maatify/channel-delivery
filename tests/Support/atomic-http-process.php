@@ -13,7 +13,7 @@ use Tests\Support\AtomicTestPdo;
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-/** @var array{dir: string, name: string, hold: bool, env: array<string, mixed>, payload: array<string, mixed>} $spec */
+/** @var array{dir: string, name: string, hold: bool, env: array<string, mixed>, payload: array<string, mixed>, path?: string, barrier?: bool} $spec */
 $spec = json_decode((string) file_get_contents($argv[1] ?? ''), true, 512, JSON_THROW_ON_ERROR);
 $_ENV = $spec['env'];
 $base = $spec['dir'] . '/' . $spec['name'];
@@ -49,8 +49,22 @@ $container->set(AtomicEmailConnectionFactory::class, new AtomicEmailConnectionFa
     return $pdo;
 }));
 $app = Application::create($container);
-$request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v2/email/enqueue', ['REMOTE_ADDR' => '127.0.0.1'])
-    ->withHeader('X-Api-Key', 'fixture-key-a')->withHeader('Idempotency-Key', 'concurrent-key')->withHeader('Content-Type', 'application/json')->withHeader('Accept', 'application/json')
+$path = $spec['path'] ?? '/api/v2/email/enqueue';
+$request = (new ServerRequestFactory())->createServerRequest('POST', $path, ['REMOTE_ADDR' => '127.0.0.1'])
+    ->withHeader('X-Api-Key', 'fixture-key-a')->withHeader('Content-Type', 'application/json')->withHeader('Accept', 'application/json')
     ->withBody((new StreamFactory())->createStream(json_encode($spec['payload'], JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION)));
+if ($path !== '/api/v2/email/synthetic') {
+    $request = $request->withHeader('Idempotency-Key', 'concurrent-key');
+}
+if ($spec['barrier'] ?? false) {
+    file_put_contents($base . '.ready', '1');
+    $deadline = microtime(true) + 10;
+    while (!is_file($spec['dir'] . '/release')) {
+        if (microtime(true) > $deadline) {
+            throw new RuntimeException('Owned synthetic process barrier timed out.');
+        }
+        usleep(10000);
+    }
+}
 $response = $app->handle($request);
 file_put_contents($base . '.result', json_encode(['pid' => getmypid(), 'status' => $response->getStatusCode(), 'body' => json_decode((string) $response->getBody(), true, 512, JSON_THROW_ON_ERROR)], JSON_THROW_ON_ERROR));

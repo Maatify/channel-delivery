@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 use Maatify\ChannelDelivery\Email\AtomicEmailConnectionFactory;
 use Maatify\ChannelDelivery\Email\AtomicEmailGateway;
+use Maatify\ChannelDelivery\Email\SyntheticEmailGateway;
+use Maatify\Crypto\DX\CryptoProvider;
+use Maatify\Crypto\Contract\CryptoContextProviderInterface;
+use Maatify\EmailDelivery\Synthetic\SyntheticEmailRecorderInterface;
+use Maatify\EmailDelivery\Synthetic\SyntheticEmailMaintenanceInterface;
 use Maatify\ChannelDelivery\Email\ConsumerNamespaceRepositoryInterface;
 use Maatify\ChannelDelivery\Email\PdoConsumerNamespaceRepository;
 use Maatify\EmailDelivery\Queue\IdempotentEmailQueueWriterInterface;
@@ -77,6 +82,13 @@ return [
     IdempotentEmailQueueWriterInterface::class => get(AtomicEmailGateway::class),
     EmailEnqueueReceiptReaderInterface::class => get(AtomicEmailGateway::class),
     ConsumerNamespaceRepositoryInterface::class => autowire(PdoConsumerNamespaceRepository::class),
+
+    // Optional no-send path. Explicit retention is validated when recording/maintenance is used.
+    SyntheticEmailGateway::class => factory(function (AtomicEmailConnectionFactory $connections, CryptoProvider $crypto, CryptoContextProviderInterface $contexts): SyntheticEmailGateway {
+        return new SyntheticEmailGateway($connections, $crypto, $contexts, (string) ($_ENV['SYNTHETIC_EMAIL_RETENTION_SECONDS'] ?? ''));
+    }),
+    SyntheticEmailRecorderInterface::class => get(SyntheticEmailGateway::class),
+    SyntheticEmailMaintenanceInterface::class => get(SyntheticEmailGateway::class),
 
     // ── Worker ────────────────────────────────────────────────
     // LoggerInterface is resolved from the container (defined in crypto.php).

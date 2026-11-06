@@ -1,5 +1,8 @@
 # Channel Delivery API Documentation
 
+Optional [synthetic recording](api/email-synthetic.md) is a separate trusted no-send endpoint; it never enqueues email.
+
+
 For keyed atomic acceptance and receipt recovery, see the additive [v2 contract](api/email-atomic.md). The v1 examples below retain legacy per-call inserts.
 
 
@@ -11,6 +14,8 @@ The service currently exposes:
 
 * `GET /health`
 * `POST /api/v1/email/enqueue`
+* `POST /api/v2/email/enqueue` and `GET /api/v2/email/receipt` — see the v2 contract linked above
+* `POST /api/v2/email/synthetic` — see the separate no-send contract linked above
 
 This document should be updated whenever:
 
