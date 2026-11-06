@@ -68,7 +68,7 @@
   },
   "scripts": {
     "test": "phpunit",
-    "analyse": "phpstan analyse src tests config/dependencies/email_delivery.php --level=max",
+    "analyse": "phpstan analyse src tests config/dependencies/email_delivery.php scripts/purge_synthetic_email.php --level=max",
     "format": "php-cs-fixer fix"
   },
   "config": {

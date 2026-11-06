@@ -32,6 +32,10 @@ Atomic keyed acceptance and receipt lookup are available through the additive
 Follow the [schema/binding rollout](docs/how-to/atomic-email-rollout.md) before enabling v2.
 v1 keeps its existing behavior.
 
+The optional [synthetic no-send HTTP endpoint](docs/api/email-synthetic.md) records
+encrypted inert data in separate storage. It requires explicit retention and
+[bounded cleanup](docs/how-to/synthetic-email-operations.md); no timing-equality promise is made.
+
 ## Features
 
 - **Async Multi-Channel Queue**

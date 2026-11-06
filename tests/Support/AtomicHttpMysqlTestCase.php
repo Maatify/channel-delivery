@@ -49,7 +49,7 @@ abstract class AtomicHttpMysqlTestCase extends TestCase
             'DB_USERNAME' => (string) getenv('CHANNEL_IT_USER'), 'DB_PASSWORD' => (string) getenv('CHANNEL_IT_PASS'),
             'CRYPTO_ACTIVE_KEY_ID' => 'fixture-v1', 'CRYPTO_KEYS' => json_encode([['id' => 'fixture-v1', 'key' => str_repeat('k', 32)]], JSON_THROW_ON_ERROR),
             'REDIS_HOST' => (string) getenv('CHANNEL_IT_REDIS_HOST'), 'REDIS_PORT' => '6379', 'REDIS_TIMEOUT' => '0.2', 'REDIS_PASSWORD' => '', 'REDIS_DB' => '0',
-            'RATE_LIMIT_MAX_REQUESTS' => '10000', 'RATE_LIMIT_WINDOW_SECONDS' => '60', 'TRUSTED_PROXIES' => '',
+            'SYNTHETIC_EMAIL_RETENTION_SECONDS' => '3600', 'RATE_LIMIT_MAX_REQUESTS' => '10000', 'RATE_LIMIT_WINDOW_SECONDS' => '60', 'TRUSTED_PROXIES' => '',
         ]);
         $apiKeys = new ApiKeyRepository($this->pdo);
         foreach (['a', 'rotated', 'b', 'unbound'] as $name) {
@@ -75,14 +75,15 @@ abstract class AtomicHttpMysqlTestCase extends TestCase
 
     private function resetSchema(): void
     {
-        foreach (['cd_email_consumer_bindings', 'cd_email_enqueue_receipts', 'cd_email_queue', 'cd_api_keys'] as $table) {
+        foreach (['cd_email_synthetic_requests', 'cd_email_consumer_bindings', 'cd_email_enqueue_receipts', 'cd_email_queue', 'cd_api_keys'] as $table) {
             $this->pdo->exec('DROP TABLE IF EXISTS ' . $table);
         }
         $root = dirname(__DIR__, 2);
         foreach (['migrations/001_create_email_queue.sql', 'migrations/002_create_api_keys.sql',
             'migrations/003_optimize_worker_poll_index.sql', 'migrations/004_create_email_consumer_bindings.sql',
             'vendor/maatify/email-delivery/schema/mysql/002_email_enqueue_receipts.sql',
-            'vendor/maatify/email-delivery/schema/mysql/003_email_queue_receipt_binding.sql'] as $file) {
+            'vendor/maatify/email-delivery/schema/mysql/003_email_queue_receipt_binding.sql',
+            'vendor/maatify/email-delivery/schema/mysql/004_email_synthetic_requests.sql'] as $file) {
             $sql = file_get_contents($root . '/' . $file);
             if ($sql === false) {
                 throw new \RuntimeException('Missing package fixture SQL.');

@@ -103,5 +103,5 @@ do not depend on every HTTP 5xx having the atomic handler's JSON envelope.
 ## Operators
 
 See [v2 rollout and recovery](../how-to/atomic-email-rollout.md) for exact schema
-sources, binding lifecycle, UTC sessions and retention. No synthetic route is
-included; channel-delivery issue #5 remains a separate study.
+sources, binding lifecycle, UTC sessions and retention. Optional [synthetic recording](email-synthetic.md) is a separate no-send contract
+under issue #5. It does not accept a real idempotency key or return a delivery receipt.
