@@ -97,6 +97,13 @@ final readonly class AtomicEmailHandler
                 throw new InvalidArgumentException('Unknown request field.');
             }
         }
+        if (property_exists($object, 'context')) {
+            if (!$object->context instanceof stdClass) {
+                throw new InvalidArgumentException('Context must be an object.');
+            }
+            // Validate object/list distinctions BEFORE associative decoding can erase them.
+            $this->assertContextShape($object->context, true);
+        }
         // Decode the ORIGINAL bytes: re-encoding without preserve-zero would collapse float1.0 into int1.
         /** @var array<string, mixed> $body */
         $body = json_decode($raw, true, 64, JSON_THROW_ON_ERROR);
@@ -119,13 +126,32 @@ final readonly class AtomicEmailHandler
         if (!is_int($sender) || $sender < 0 || $sender > 255 || !is_int($priority) || $priority < 1 || $priority > 10) {
             throw new InvalidArgumentException('Invalid integer.');
         }
-        if (property_exists($object, 'context') && !$object->context instanceof stdClass) {
-            throw new InvalidArgumentException('Context must be an object.');
-        }
         /** @var array<string, mixed> $context */
         $context = $body['context'] ?? [];
         return new EmailEnqueueRequestDTO($namespace, $key, $entityType, $entity, $recipient,
             new EmailQueuePayloadDTO($context, $template, $language, $reply), $sender, $priority);
+    }
+
+    /** The package accepts arrays; reject JSON objects whose shape cannot be retained safely. */
+    private function assertContextShape(mixed $value, bool $root = false): void
+    {
+        if ($value instanceof stdClass) {
+            $fields = get_object_vars($value);
+            // The context root is always an object by contract; nested {} would become [].
+            if (!$root && $fields === []) {
+                throw new InvalidArgumentException('Nested empty objects are not supported.');
+            }
+            foreach ($fields as $name => $child) {
+                if (preg_match('/\A(?:0|-?[1-9][0-9]*)\z/', (string) $name) === 1) {
+                    throw new InvalidArgumentException('Integer-shaped object keys are not supported.');
+                }
+                $this->assertContextShape($child);
+            }
+        } elseif (is_array($value)) {
+            foreach ($value as $child) {
+                $this->assertContextShape($child);
+            }
+        }
     }
 
     /** @param array<string, mixed> $body */

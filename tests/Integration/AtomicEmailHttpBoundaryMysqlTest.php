@@ -69,4 +69,60 @@ final class AtomicEmailHttpBoundaryMysqlTest extends AtomicHttpMysqlTestCase
         self::assertSame(['error' => 'enqueue_unavailable', 'acceptance' => 'unknown', 'retry_same_key' => true], $this->json($response));
         self::assertSame('0', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_queue'));
     }
+    /** @return iterable<string, array{string}> */
+    public static function ambiguousObjects(): iterable
+    {
+        yield 'list-shaped object' => ['{"nested":{"0":"x"}}'];
+        yield 'sparse integer key' => ['{"nested":{"2":"x"}}'];
+        yield 'negative integer key' => ['{"nested":{"-1":"x"}}'];
+        yield 'mixed integer and named keys' => ['{"nested":{"0":"x","name":"y"}}'];
+        yield 'object below list' => ['{"nested":[{"0":"x"}]}'];
+        yield 'empty nested object' => ['{"nested":{}}'];
+        yield 'empty object below list' => ['{"nested":[{}]}'];
+    }
+
+    #[DataProvider('ambiguousObjects')]
+    public function testRawAmbiguousObjectsAreRejectedBeforeAnyPersistence(string $context): void
+    {
+        [$app] = $this->application();
+        $response = $app->handle($this->rawContextRequest($context));
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('validation_error', $this->json($response)['error']);
+        self::assertSame('0', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_queue'));
+        self::assertSame('0', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_enqueue_receipts'));
+    }
+
+    public function testRawObjectCannotReplayAnAcceptedListWithTheSameKey(): void
+    {
+        [$app] = $this->application();
+        $accepted = $app->handle($this->rawContextRequest('{"nested":["x"]}'));
+        self::assertSame(202, $accepted->getStatusCode());
+        $rejected = $app->handle($this->rawContextRequest('{"nested":{"0":"x"}}'));
+        self::assertSame(422, $rejected->getStatusCode());
+        self::assertSame($this->json($accepted), $this->json($this->request($app, 'GET', key: 'raw-shape', path: '/api/v2/email/receipt')));
+        self::assertSame('1', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_queue'));
+        self::assertSame('1', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_enqueue_receipts'));
+    }
+
+    public function testRawNamedObjectsAndListsRemainAcceptedAndDistinct(): void
+    {
+        [$app] = $this->application();
+        self::assertSame(202, $app->handle($this->rawContextRequest('{"nested":{"label":"x","01":"y","empty":[]}}'))->getStatusCode());
+        self::assertSame(409, $app->handle($this->rawContextRequest('{"nested":["x","y",[]]}'))->getStatusCode());
+        self::assertSame('1', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_queue'));
+        self::assertSame('1', self::scalar($this->pdo, 'SELECT COUNT(*) FROM cd_email_enqueue_receipts'));
+        self::assertSame(202, $app->handle($this->rawContextRequest('{}')->withHeader('Idempotency-Key', 'empty-root'))->getStatusCode());
+    }
+
+    private function rawContextRequest(string $context): \Psr\Http\Message\ServerRequestInterface
+    {
+        $payload = $this->payload();
+        unset($payload['context']);
+        $raw = substr(json_encode($payload, JSON_THROW_ON_ERROR), 0, -1) . ',"context":' . $context . '}';
+        return (new ServerRequestFactory())->createServerRequest('POST', '/api/v2/email/enqueue', ['REMOTE_ADDR' => '127.0.0.1'])
+            ->withHeader('X-Api-Key', 'fixture-key-a')->withHeader('Idempotency-Key', 'raw-shape')
+            ->withHeader('Content-Type', 'application/json')->withHeader('Accept', 'application/json')
+            ->withBody((new StreamFactory())->createStream($raw));
+    }
+
 }

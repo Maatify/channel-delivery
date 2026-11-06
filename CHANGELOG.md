@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- F8-01: reject ambiguous numeric-keyed and empty nested JSON objects before associative conversion, with raw HTTP regression tests; preserve named objects and lists.
+
 ### Added
 - v2 atomic email acceptance and authenticated receipt lookup via email-delivery1.2.0.
 - Stable operator-owned consumer bindings and explicit canonical vendor migrations.

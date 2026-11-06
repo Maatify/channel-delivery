@@ -36,6 +36,18 @@ email template context as [v1](email-enqueue.md), with strict v2 validation:
 | reply_to | Optional valid email at most 320 bytes; empty string normalizes to null |
 
 Body must be a JSON object, at most 1 MiB before parsing, with no unknown fields.
+Before conversion to the package's PHP arrays, v2 rejects JSON objects in context
+with canonical integer-shaped property names (`0`, `1`, `-1`, etc.), including
+sparse/mixed objects and objects inside lists. Nested empty objects (`{}`) are
+also rejected: both they and list-shaped numeric objects would lose their object
+type during conversion. These shapes return422 before any receipt/job is written.
+Use actual lists for ordered values. Named nonempty objects and lists (including
+empty lists) remain supported, as does the empty context root `{}`. A property
+such as `"01"` remains a string and is supported. Never silently rewrite a used
+intent to bypass validation: reconcile its original key/content first. A receipt
+accepted before this guard remains queryable through GET even if its original
+context shape is now rejected on POST.
+
 No scheduling field is exposed. Template existence/rendering is checked by the
 worker, so acceptance does not prove a template will render or SMTP will succeed.
 Context types/order are significant to the library fingerprint: do not change
