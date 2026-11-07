@@ -57,7 +57,7 @@ curl_setopt_array($ch, [
 $response   = curl_exec($ch);
 $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 $curlError  = curl_error($ch);
-curl_close($ch);
+unset($ch);
 
 // ── Output ────────────────────────────────────────────────────
 if ($curlError !== '') {

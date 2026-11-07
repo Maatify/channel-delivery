@@ -4,8 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0]
+
+Release target allocated for preparation; no publication date or tag is asserted here.
+
 ### Fixed
-- F8-01: reject ambiguous numeric-keyed and empty nested JSON objects before associative conversion, with raw HTTP regression tests; preserve named objects and lists.
+- Reject ambiguous numeric-keyed and empty nested JSON objects before associative conversion, with raw HTTP regression tests; preserve named objects and lists.
 
 ### Added
 - Optional authenticated POST /api/v2/email/synthetic via the package's isolated no-send store (#5).
@@ -16,9 +20,12 @@ All notable changes to this project will be documented in this file.
 - Real HTTP/MySQL/Redis integration, uncertain-commit recovery and multiprocess lock-contention tests.
 
 ### Changed
-- Project runtime PHP8.4+, CI8.4/8.5, committed Composer lock; library compatibility remains unchanged.
+- Project runtime PHP8.4+, an explicit PDO MySQL extension requirement, CI8.4/8.5 and committed Composer lock; library compatibility remains unchanged.
 - APP_DEBUG textual false disables response exception details (channel-delivery#7).
-- Legacy v1 behavior and mail policy retained; no synthetic HTTP endpoint.
+- Complete the 2.0.0 upgrade, configuration, consumer examples, release artifact checks and Maatify presentation.
+- Correct fixed-window rate-limit terminology, SMTP debug/proxy examples and welcome context.
+- Remove deprecated no-op curl_close() from the diagnostic script for PHP 8.5.
+- Legacy v1 behavior and mail policy retained alongside the new optional synthetic endpoint.
 
 ## [1.1.0] - 2026-05-17
 
@@ -50,3 +57,8 @@ All notable changes to this project will be documented in this file.
 - Async email pipeline with AES-256-GCM encryption.
 - Redis sliding window rate limiter.
 - API key generation and IP whitelisting.
+
+[Unreleased]: https://github.com/Maatify/channel-delivery/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Maatify/channel-delivery/releases/tag/v1.1.0
+[1.0.1]: https://github.com/Maatify/channel-delivery/releases/tag/v1.0.1
+[1.0.0]: https://github.com/Maatify/channel-delivery/tree/v1.0.0

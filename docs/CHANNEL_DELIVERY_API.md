@@ -27,6 +27,8 @@ This document should be updated whenever:
 
 ---
 
+For environment/CLI details use the [configuration reference](reference/configuration.md); for project2.0.0 installation/runtime compatibility use the [usage guide](guides/USAGE_GUIDE.md). The detailed validation and template sections below describe **legacy v1**; v2 contracts are separate linked references.
+
 ## Base Behavior
 
 ### Authentication
@@ -49,7 +51,7 @@ Requests must use:
 
 ### Rate Limiting
 
-Protected endpoints are rate limited.
+Protected endpoints share the existing per-key Redis fixed-window counter. Redis unavailability is fail-open; this is not a strict storage quota or general DoS guarantee.
 
 Response headers may include:
 

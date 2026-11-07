@@ -1,16 +1,28 @@
-# Security Audit Report
+# Security mechanisms and verification boundaries
 
-## Overview
-This document outlines the security mechanisms implemented in `maatify/channel-delivery`.
+This file describes current mechanisms in the2.0.0 source. It is **not an independent
+security audit or certification**. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
-### 1. Data at Rest (Encryption)
-All recipient information and message contexts are encrypted at rest using `AES-256-GCM` via the `maatify/crypto` library. Key rotation is fully supported through the `CRYPTO_KEYS` environment variable configuration.
+- Recipient and payload data (including context/Reply-To) are encrypted by
+  maatify/crypto through email-delivery. Entity/template/namespace/date metadata is
+  plaintext; encryption at rest does not anonymize the record.
+- Ingestion requires an active hashed API key and exact caller-IP whitelist.
+  Proxy trust is opt-in by exact IP, not CIDR. v2 consumer namespace is server-owned.
+- Rate limiting is the existing Redis fixed-window request counter. Redis failure
+  is fail-open, so it is not a strict quota or general DoS guarantee.
+- v2 validates bounded raw JSON before conversion, including ambiguous object/list
+  shapes. Atomic acceptance requires fresh UTC sessions, canonical transactional
+  schemas, immutable keys/content and retention of receipt identity/read keys.
+- Synthetic recording uses isolated optional storage with separate crypto domains,
+  no worker schedule and no transfer to real queue. Retention is explicit; cleanup
+  is trusted/global/bounded and must be operated. Expiry alone does not delete rows.
+- APP_DEBUG=false hides response exception details. SMTP diagnostic output is
+  controlled by MAIL_DEBUG_LEVEL; logs still need operator access/redaction/retention.
+- Local integration and CI evidence is described in [contributing](CONTRIBUTING.md)
+  and the [release checklist](docs/releases/RELEASE_CHECKLIST.md). Composer audit checks
+  known dependency advisories at execution time, not all possible vulnerabilities.
 
-### 2. API Protection
-The ingestion API (`/api/v1/email/enqueue`) is protected by:
-- **API Keys**: Unique keys generated securely (`random_bytes(32)`).
-- **IP Whitelisting**: Keys can be restricted to specific originating IPs.
-- **Rate Limiting**: A Redis sliding-window counter prevents denial-of-service (DoS) and abuse.
-
-### 3. Dependency Security
-Dependencies are managed via Composer and regularly audited for known vulnerabilities.
+Queue acceptance is not mailbox delivery or exactly-once SMTP. Synthetic timing
+smoke measurements do not prove equal distributions or prevent enumeration in a
+consumer. Consumer eligibility, public responses, secrets, proxy configuration,
+deployment, migrations and ongoing cleanup need their own validation.

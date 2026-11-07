@@ -1,28 +1,45 @@
+<div align="center">
+
 # Maatify Channel Delivery
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/maatify/channel-delivery.svg)](https://packagist.org/packages/maatify/channel-delivery)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://www.maatify.dev/company-profile/maatify_logo_white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://www.maatify.dev/company-profile/maatify_logo_dark.svg">
+  <img alt="Maatify.dev" src="https://www.maatify.dev/company-profile/maatify_logo_dark.svg">
+</picture>
 
-[![PHP Version](https://img.shields.io/packagist/php-v/maatify/channel-delivery.svg)](https://packagist.org/packages/maatify/channel-delivery)
+[![Published channel](https://img.shields.io/badge/Published_channel-Stable-blue)](https://github.com/Maatify/channel-delivery/releases) [![Live Version](https://img.shields.io/packagist/v/maatify/channel-delivery.svg?label=Live%20version)](https://packagist.org/packages/maatify/channel-delivery) [![PHP](https://img.shields.io/badge/PHP-8.4%2B-8892BF)](composer.json) [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE) [![PHPStan](https://img.shields.io/badge/PHPStan-max-brightgreen)](CONTRIBUTING.md) [![Live main CI](https://github.com/Maatify/channel-delivery/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Maatify/channel-delivery/actions/workflows/ci.yml)
 
-[![License](https://img.shields.io/github/license/Maatify/channel-delivery.svg)](LICENSE)
+[![Packagist](https://img.shields.io/badge/Registry-Packagist-orange)](https://packagist.org/packages/maatify/channel-delivery) [![Monthly Downloads](https://img.shields.io/packagist/dm/maatify/channel-delivery)](https://packagist.org/packages/maatify/channel-delivery) [![Total Downloads](https://img.shields.io/packagist/dt/maatify/channel-delivery)](https://packagist.org/packages/maatify/channel-delivery) [![Maatify Ecosystem](https://img.shields.io/badge/Maatify-Ecosystem-blueviolet)](https://github.com/Maatify) [![Install](https://img.shields.io/badge/Composer-create--project-885630)](#installation)
 
-[![CI](https://github.com/Maatify/channel-delivery/actions/workflows/ci.yml/badge.svg)](https://github.com/Maatify/channel-delivery/actions)
+[Usage Guide](docs/guides/USAGE_GUIDE.md) · [Examples](examples/README.md) · [HTTP Reference](docs/CHANNEL_DELIVERY_API.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
-![Maatify Ecosystem](https://img.shields.io/badge/Maatify-Ecosystem-blueviolet)
+Standalone asynchronous email delivery service with encrypted queues, atomic acceptance and isolated no-send recording. Other delivery channels are planned.
+
+</div>
+
+---
+
+**Artifact target: `2.0.0`** — this source tree prepares the project release; HTTP API versioning is separate.
+
+**Publication snapshot at preparation (2026-11-07):** `2.0.0` was unpublished;
+`1.1.0` was the verified published release. The badges above report live repository/registry state,
+not the identity or qualification of this artifact. See the [2.0.0 release guide](docs/releases/2.0.0.md)
+and [upgrade guide](docs/upgrade/2.0.0.md). No release-qualified SHA or publication is claimed by preparation.
 
 ## Overview
 
-**Maatify Channel Delivery** is a standalone async multi-channel delivery microservice for sending notifications across channels like **Email, Telegram, SMS, and Push**.
+**Maatify Channel Delivery** is a standalone asynchronous email delivery microservice, designed to accommodate additional channels in future releases.
 
-It offloads delivery processing from your core applications, ensuring:
+It offloads delivery processing from your core applications, providing:
 
-- High availability
+- Independent ingestion and worker operation
 - Background delivery processing
 - Retry mechanisms
 - Secure payload encryption
 - Controlled API ingestion
 
-Currently, the **Email channel is fully implemented and production-ready**.
+The **Email channel is implemented**. Acceptance confirms queue persistence; delivery is processed separately by the worker.
 Additional channels such as **SMS, Telegram, and Push notifications** are planned for future releases.
 
 ---
@@ -38,7 +55,7 @@ encrypted inert data in separate storage. It requires explicit retention and
 
 ## Features
 
-- **Async Multi-Channel Queue**
+- **Async Email Queue**
   Process notifications asynchronously using background workers.
 
 - **Encrypted Payloads**
@@ -51,13 +68,13 @@ encrypted inert data in separate storage. It requires explicit retention and
   Optional `reply_to` field for admin notification emails — email goes to the admin, replies go to the customer.
 
 - **Robust Delivery**
-  Exponential retry strategy for transient delivery failures.
+  Bounded retry/backoff handling for delivery failures.
 
 - **API Key & IP Whitelisting**
   Secure ingestion endpoints allowing only trusted origin servers.
 
 - **Rate Limiting**
-  Redis-backed sliding window rate limiter to prevent abuse.
+  Redis-backed fixed-window request counter per API key. The existing Redis-unavailable behavior is fail-open.
 
 - **Containerized Dependency Injection**
   Built on **Slim 4 + PHP-DI** for modular and testable architecture.
@@ -99,10 +116,10 @@ Recipient
 Detailed processing steps:
 
 1. **Enqueue**
-   Client calls `/api/v1/email/enqueue`.
+   In this legacy pipeline example, the client calls `/api/v1/email/enqueue`. The additive v2 paths are described below.
 
 2. **Encryption**
-   `EnqueueEmailHandler` encrypts recipient and context via `Maatify\Crypto`.
+   The handler delegates recipient and payload encryption/persistence to `maatify/email-delivery`, using `Maatify\Crypto`.
 
 3. **Persistence**
    Job stored securely in `cd_email_queue`.
@@ -122,13 +139,28 @@ Detailed processing steps:
 
 ## Requirements
 
-- PHP **8.4+** (CI: 8.4 and 8.5)
-- MySQL / MariaDB
+- PHP **8.4+** for this 2.0.0 artifact (CI: 8.4 and 8.5); see [upgrade compatibility](docs/upgrade/2.0.0.md)
+- MySQL with InnoDB and the PDO MySQL driver; service CI currently exercises MySQL 9.2. MariaDB deployment compatibility needs its own qualification.
 - Redis
 - SMTP server
 - Composer
 
 ---
+
+## Public Runtime API
+
+| Entry point | Contract |
+| --- | --- |
+| `GET /health` | Service/database health; no SMTP-delivery probe |
+| `POST /api/v1/email/enqueue` | Legacy per-call insert; `202 queued` |
+| `POST /api/v2/email/enqueue` | Atomic acceptance with stable consumer/key identity; `202 accepted` |
+| `GET /api/v2/email/receipt` | Same-key receipt recovery; `200` or point-in-time `404` |
+| `POST /api/v2/email/synthetic` | Isolated encrypted no-send recording; `202 recorded` |
+| API-key / email-worker / synthetic-purge CLI | [Operator commands and configuration](docs/reference/configuration.md) |
+
+The [HTTP reference](docs/CHANNEL_DELIVERY_API.md) links the complete contracts and template fields.
+Application classes and vendor internals are implementation details, not a PHP library API.
+See [v2 examples](examples/README.md) for same-key recovery and no-send usage.
 
 ## Related Projects
 - [`maatify/email-delivery`](https://github.com/Maatify/email-delivery) – email delivery engine
@@ -138,18 +170,28 @@ Detailed processing steps:
 
 ## Installation
 
-Clone the repository or install via Composer:
+The published Stable channel is available through the [registry](https://packagist.org/packages/maatify/channel-delivery).
+A generic `composer create-project maatify/channel-delivery` follows that channel and does not select an unpublished target.
+
+**Only after exact 2.0.0 publication**, install this artifact with:
 
 ```bash
-composer create-project maatify/channel-delivery
+composer create-project --prefer-dist --no-dev maatify/channel-delivery channel-delivery 2.0.0
 cd channel-delivery
 ```
 
-Install dependencies:
+During preparation, use a reviewed source checkout instead:
 
 ```bash
-composer install --optimize-autoloader --no-dev
+git clone https://github.com/Maatify/channel-delivery.git
+cd channel-delivery
+git checkout <reviewed-commit-or-published-tag>
+composer install --no-dev --prefer-dist --no-interaction
 ```
+
+Do not run the placeholder checkout literally. Use the committed project lock.
+[First setup](docs/guides/USAGE_GUIDE.md#first-service-setup) includes the required `.env`, schema,
+API key and worker steps. The HTTP document root is **`public/`**, never the repository root.
 
 ---
 
@@ -217,13 +259,13 @@ Key requirements:
 * Keys support **rotation**
 * Old keys remain for **decryption only**
 
-Generate a secure 32-byte key:
+The following existing format produces 32 ASCII key-material bytes from 16 random bytes (128 bits of randomness); it is not 32 random bytes and is not automatically hex-decoded:
 
 ```bash
 php -r "echo bin2hex(random_bytes(16));"
 ```
 
-This will generate a **32-character string**, for example:
+This generates a **32-character ASCII string**, for example:
 
 ```
 a3f9c2d1e4b5f6a7c8d9e0f1a2b3c4d5
@@ -238,7 +280,7 @@ CRYPTO_KEYS='[{"id":"v1","key":"a3f9c2d1e4b5f6a7c8d9e0f1a2b3c4d5"}]'
 
 Key requirements:
 
-* Must be **exactly 32 characters**
+* Must be **exactly 32 raw bytes** (32 ASCII characters in this example)
 * Used as the symmetric encryption key for AES-256-GCM
 * Keys support **rotation**
 
@@ -258,7 +300,7 @@ SMTP configuration used by the email delivery worker.
 | `MAIL_FROM_NAME`    | Sender display name             |
 | `MAIL_ENCRYPTION`   | Encryption type (`tls` / `ssl`) |
 | `MAIL_TIMEOUT`      | SMTP timeout (seconds)          |
-| `MAIL_DEBUG`        | SMTP debug mode (0 = disabled)  |
+| `MAIL_DEBUG_LEVEL`  | SMTP debug level (0 = disabled) |
 
 ---
 
@@ -353,6 +395,13 @@ See the worker setup guide:
 
 ## Documentation
 
+* [Documentation Index](docs/index.md)
+* [Usage Guide](docs/guides/USAGE_GUIDE.md)
+* [2.0.0 Upgrade Guide](docs/upgrade/2.0.0.md)
+* [Configuration / CLI Reference](docs/reference/configuration.md)
+* [Atomic v2 Contract](docs/api/email-atomic.md)
+* [Synthetic Contract](docs/api/email-synthetic.md)
+* [Release Qualification Checklist](docs/releases/RELEASE_CHECKLIST.md)
 * [Run Worker Guide](docs/how-to/run-worker.md)
 * [Send Email Guide](docs/how-to/send-email.md)
 * [API Documentation: Email Enqueue](docs/api/email-enqueue.md)
@@ -365,3 +414,22 @@ See the worker setup guide:
 This project is open-sourced software licensed under the **MIT License**.
 
 See the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Use a source clone and the [contribution guide](CONTRIBUTING.md). Release archives omit test infrastructure.
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md) and report vulnerabilities privately through [SECURITY.md](SECURITY.md).
+
+## Author
+
+Engineered by **Mohamed Abdulalim** ([@megyptm](https://github.com/megyptm))<br>
+Backend Lead & Technical Architect<br>
+[https://www.maatify.dev](https://www.maatify.dev)
+
+---
+
+<div align="center">
+
+[Built with ❤️ by Maatify.dev — Unified Ecosystem for Modern PHP Libraries](https://www.maatify.dev)
+
+</div>

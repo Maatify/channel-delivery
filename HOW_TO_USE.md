@@ -1,24 +1,12 @@
-# How to Use
+# How to use Channel Delivery
 
-This document provides a quick overview of integrating with `maatify/channel-delivery`.
+Start with the maintained [usage guide](docs/guides/USAGE_GUIDE.md).
 
-## 1. Setup Environment
-Copy `.env.example` to `.env` and populate the necessary credentials (DB, Redis, SMTP, Crypto Keys).
+- [First setup](docs/guides/USAGE_GUIDE.md#first-service-setup): environment, schema, key and worker.
+- [Consumer examples](examples/README.md): legacy real, keyed real, receipt recovery and isolated no-send calls.
+- [HTTP/template reference](docs/CHANNEL_DELIVERY_API.md).
+- [2.0.0 upgrade](docs/upgrade/2.0.0.md) and [configuration/CLI](docs/reference/configuration.md).
 
-## 2. Generate an API Key
-Run the built-in script to generate an API Key, specifying the allowed originating IPs:
-```bash
-php scripts/create_api_key.php --name="Main App" --ips="127.0.0.1"
-```
-
-## 3. Run the Worker
-Set up a background worker to poll and send emails (e.g., via Supervisor):
-```bash
-php scripts/email_worker.php --batch=50 --loop --sleep=5
-```
-
-## 4. Enqueue Messages
-From your main application, send an HTTP POST request to the delivery microservice:
-```bash
-curl -X POST http://localhost:8080/api/v1/email/enqueue \n  -H "X-Api-Key: YOUR_API_KEY" \n  -d '{...}'
-```
+The v1 endpoint remains per-call enqueue. Atomic recovery requires v2 and its
+explicit schema/binding adoption. Use synthetic recording only when no email
+should be queued; it does not promise identical timing or account-flow protection.

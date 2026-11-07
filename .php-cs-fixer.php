@@ -2,12 +2,12 @@
 
 /**
  * @copyright   ©2026 Maatify.dev
- * @Library     maatify/IAM-CORE
- * @Project     maatify:IAM-CORE
+ * @Library     maatify/channel-delivery
+ * @Project     maatify:channel-delivery
  * @author      Mohamed Abdulalim (megyptm) <mohamed@maatify.dev>
  * @since       2026-03-02 03:22:00
  * @see         https://www.maatify.dev
- * @link        https://github.com/Maatify/IAM-CORE view Project on GitHub
+ * @link        https://github.com/Maatify/channel-delivery view Project on GitHub
  * @note        Distributed in the hope that it will be useful - WITHOUT WARRANTY.
  */
 
