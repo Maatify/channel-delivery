@@ -20,12 +20,18 @@ Standalone asynchronous email delivery service with encrypted queues, atomic acc
 
 ---
 
-**Artifact target: `2.0.0`** — this source tree prepares the project release; HTTP API versioning is separate.
+**Artifact target: `2.0.0`** — project release identity; HTTP API versioning is separate.
+
+**Current publication (2026-11-07):** [2.0.0 is published](https://github.com/Maatify/channel-delivery/releases/tag/v2.0.0)
+and available through Composer. Its immutable source is commit
+[`c5714f8d1b3fc13e4d42e88501c668af3f1595ac`](https://github.com/Maatify/channel-delivery/commit/c5714f8d1b3fc13e4d42e88501c668af3f1595ac).
+Exact-version Composer installation and all 88 distributed source files were verified.
+Security support covers both 1.x and 2.x; see [SECURITY.md](SECURITY.md).
 
 **Publication snapshot at preparation (2026-11-07):** `2.0.0` was unpublished;
 `1.1.0` was the verified published release. The badges above report live repository/registry state,
 not the identity or qualification of this artifact. See the [2.0.0 release guide](docs/releases/2.0.0.md)
-and [upgrade guide](docs/upgrade/2.0.0.md). No release-qualified SHA or publication is claimed by preparation.
+and [upgrade guide](docs/upgrade/2.0.0.md). This historical preparation snapshot does not describe current availability; the publication record above does.
 
 ## Overview
 
@@ -173,14 +179,14 @@ See [v2 examples](examples/README.md) for same-key recovery and no-send usage.
 The published Stable channel is available through the [registry](https://packagist.org/packages/maatify/channel-delivery).
 A generic `composer create-project maatify/channel-delivery` follows that channel and does not select an unpublished target.
 
-**Only after exact 2.0.0 publication**, install this artifact with:
+Install the published 2.0.0 project with:
 
 ```bash
 composer create-project --prefer-dist --no-dev maatify/channel-delivery channel-delivery 2.0.0
 cd channel-delivery
 ```
 
-During preparation, use a reviewed source checkout instead:
+For source review or contribution, use a reviewed checkout:
 
 ```bash
 git clone https://github.com/Maatify/channel-delivery.git

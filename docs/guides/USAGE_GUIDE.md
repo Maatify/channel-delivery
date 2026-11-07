@@ -7,11 +7,11 @@ For an embedded PHP email engine, use [maatify/email-delivery](https://github.co
 
 ## Requirements and release identity
 
-This source artifact targets **2.0.0**, requiring PHP8.4+, PDO MySQL, the extensions
+The published project release **2.0.0** requires PHP8.4+, PDO MySQL, the extensions
 in composer.json, MySQL/InnoDB, Redis for the request counter and SMTP for real delivery.
 CI exercises PHP8.4/8.5 and MySQL9.2. Remote HTTP clients are not required to use the service's PHP runtime. The [release guide](../releases/2.0.0.md) records
-preparation/publication boundaries; a generic Composer create-project follows the
-published channel, not an unpublished source target.
+published-source and qualification facts. Use the exact-version install command
+in README to select2.0.0; an unversioned create-project follows the current published channel.
 
 ## First service setup
 

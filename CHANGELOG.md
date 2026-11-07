@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [2.0.0]
+## [2.0.0] - 2026-11-07
 
-Release target allocated for preparation; no publication date or tag is asserted here.
+Published as [v2.0.0](https://github.com/Maatify/channel-delivery/releases/tag/v2.0.0).
 
 ### Fixed
 - Reject ambiguous numeric-keyed and empty nested JSON objects before associative conversion, with raw HTTP regression tests; preserve named objects and lists.
@@ -58,7 +58,8 @@ Release target allocated for preparation; no publication date or tag is asserted
 - Redis sliding window rate limiter.
 - API key generation and IP whitelisting.
 
-[Unreleased]: https://github.com/Maatify/channel-delivery/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Maatify/channel-delivery/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Maatify/channel-delivery/releases/tag/v2.0.0
 [1.1.0]: https://github.com/Maatify/channel-delivery/releases/tag/v1.1.0
 [1.0.1]: https://github.com/Maatify/channel-delivery/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Maatify/channel-delivery/tree/v1.0.0
