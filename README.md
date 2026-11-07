@@ -246,11 +246,12 @@ Queue payloads and sensitive data are encrypted using **AES-256-GCM** through `m
 | `CRYPTO_ACTIVE_KEY_ID` | Identifier of the active encryption key |
 | `CRYPTO_KEYS`          | JSON array containing encryption keys   |
 
-Example:
+Configuration shape only — the placeholder below is deliberately not a usable key.
+Replace it with a new private value generated for this installation:
 
 ```env
 CRYPTO_ACTIVE_KEY_ID=v1
-CRYPTO_KEYS='[{"id":"v1","key":"replace_with_32_byte_secret_here"}]'
+CRYPTO_KEYS='[{"id":"v1","key":"<YOUR_UNIQUE_32_BYTE_SECRET>"}]'
 ```
 
 Key requirements:
@@ -265,18 +266,10 @@ The following existing format produces 32 ASCII key-material bytes from 16 rando
 php -r "echo bin2hex(random_bytes(16));"
 ```
 
-This generates a **32-character ASCII string**, for example:
-
-```
-a3f9c2d1e4b5f6a7c8d9e0f1a2b3c4d5
-```
-
-Then place it inside the `.env` configuration:
-
-```env
-CRYPTO_ACTIVE_KEY_ID=v1
-CRYPTO_KEYS='[{"id":"v1","key":"a3f9c2d1e4b5f6a7c8d9e0f1a2b3c4d5"}]'
-```
+Use the locally generated **32-character ASCII string** in place of the placeholder
+above. Generate a fresh private value for each installation; never copy a published
+example key or commit/paste the generated key into source, logs or public messages.
+Keep historical keys privately when rotating keys for retained data.
 
 Key requirements:
 

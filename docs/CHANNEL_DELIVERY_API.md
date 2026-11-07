@@ -135,17 +135,17 @@ Content-Type: application/json
 
 ### Request Fields
 
-| Field          | Type          	| Required | Description                                                                    |
-| -------------- | -----------------| -------: | ------------------------------------------------------------------------------ |
-| `entity_type`  | string        	|      Yes | Logical owner or subject type, for example `user`, `customer`, or `admin`.     |
-| `entity_id`    | `string | null` 	|       No | Optional identifier of the related entity.                                     |
-| `recipient`    | string        	|      Yes | Recipient email address. Must be a valid email.                                |
-| `reply_to`     | `string | null` |       No | Reply-To email address. When set, the email's Reply-To header is set to this address so replies go to a different address than the recipient (e.g., customer email for admin notifications). Must be a valid email if provided. |
-| `template_key` | string        	|      Yes | Email template identifier. Must match an available template.                   |
-| `language`     | string        	|      Yes | Template language code. Currently supported by existing templates: `ar`, `en`. |
-| `sender_type`  | number        	|      Yes | Numeric sender type value required by the service contract.                    |
-| `priority`     | number        	|       No | Queue priority from `1` to `10`. Default is `5`.                               |
-| `context`      | object        	|       No | Template variables injected into the selected email template. Default is `{}`. |
+| Field | Accepted input / normalization | Required | Description |
+| --- | --- | ---: | --- |
+| `entity_type` | string | Yes | Logical owner or subject type, for example `user`, `customer`, or `admin`. |
+| `entity_id` | string or null; other types become null | No | Optional identifier; non-string values are not converted to strings. |
+| `recipient` | string | Yes | Must be a valid email address. |
+| `reply_to` | nonempty string; other types or empty string are ignored | No | A nonempty string must be a valid email address; otherwise the request is rejected. |
+| `template_key` | string | Yes | Email template identifier. Choose an available template for successful worker rendering. |
+| `language` | string | Yes | Template language code; existing templates provide `ar` and `en`. |
+| `sender_type` | number or numeric string, cast to integer | Yes | Numeric sender type. |
+| `priority` | number or numeric string, cast to integer; otherwise 5 | No | The resulting integer must be from `1` to `10`. |
+| `context` | JSON object or list; otherwise empty array | No | Parsed PHP arrays are preserved, including lists. Missing, null or non-array values become `[]`. |
 
 ### Success Response
 
@@ -173,15 +173,19 @@ The following fields are required:
 
 ### Type Rules
 
-* `entity_type` must be a string
-* `recipient` must be a string and valid email address
-* `reply_to` must be a string and valid email address if provided
-* `template_key` must be a string
-* `language` must be a string
-* `sender_type` must be numeric
-* `priority` must be numeric if provided
-* `context` must be an object if provided
-* `entity_id` is optional and treated as string when provided
+These rules describe **legacy HTTP v1 only**; the additive [v2 contract](api/email-atomic.md)
+has its own validation rules. They do not tighten the existing v1 behavior.
+
+* `entity_type`, `template_key` and `language` must be strings.
+* `recipient` must be a string and a valid email address.
+* `sender_type` must be numeric (including numeric strings) and is cast to an integer.
+* `entity_id` is kept only when it is a string. Missing, null or other types become `null`; there is no string conversion.
+* `reply_to` is kept only when it is a nonempty string, which must then be a valid email address. Missing, null, non-string values and the empty string are ignored.
+* `priority` is cast to an integer when numeric (including numeric strings); missing, null or nonnumeric values use `5`. The resulting integer is then checked against `1`..`10`.
+* `context` preserves parsed PHP arrays, including JSON lists. Missing, null or non-array values become an empty array (`[]`), without a type-validation error.
+
+Template availability, language availability and required template variables must
+be chosen correctly for worker rendering; v1 enqueue does not validate them at acceptance.
 
 ### Priority Range
 
