@@ -20,7 +20,7 @@ Email is implemented; Telegram, SMS and Push remain planned.
 
 ## Release and community
 
-- [2.0.0 release target](releases/2.0.0.md), [qualification/publication checklist](releases/RELEASE_CHECKLIST.md), [changelog](../CHANGELOG.md).
+- [Published 2.0.0](releases/2.0.0.md), [qualification/publication checklist](releases/RELEASE_CHECKLIST.md), [changelog](../CHANGELOG.md).
 - [Security policy](../SECURITY.md), [security mechanisms and limits](../SECURITY_AUDIT.md).
 - [Contributing](../CONTRIBUTING.md), [code of conduct](../CODE_OF_CONDUCT.md), [MIT license](../LICENSE).
 - [Service ADRs](adr/001-atomic-email-http.md) document design; [synthetic ADR](adr/002-synthetic-email-http.md) adds the no-send path.

@@ -76,5 +76,12 @@ Normal contributor verification needs the full source clone, not the deployment 
 - Independently reconcile live default-branch publication facts, actual CHANGELOG
   date/link and2.x security support after publication;1.x is not withdrawn. This
   does not mutate the old release artifact or postpone freshness on an integrity error.
+- Audit all affected live discovery surfaces: docs/index.md, llms.txt, release and
+  upgrade guidance, GitHub About/Topics and repository home sections. Do not claim
+  planned channels as implemented; show Releases when managed, Packages only when
+  GitHub Packages is actually used, and Deployments only for a real deployment lifecycle.
+  SECURITY must direct users to the latest Stable within their own supported major line.
+  Dynamic surfaces already showing current truth do not require a forced content edit.
+  These live-state corrections are independent of Published Artifact Verification.
 - Close the governing release issue only after its required evidence/reconciliations.
   Deployments and production schemas/configuration remain separately authorized.

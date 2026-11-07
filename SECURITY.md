@@ -26,7 +26,10 @@ PHP8.4+, while previously published artifacts retain their own manifests. See
 ## Reporting a vulnerability
 
 Privately email Mohamed Abdulalim at [mohamed@maatify.dev](mailto:mohamed@maatify.dev).
-Include affected version/commit, a minimal reproduction and impact. Do not post
+Before reporting, update to the latest available stable release within your
+supported major line (1.x or 2.x) and check whether the issue still occurs. This
+does not require moving a 1.x installation to 2.x. Then include the affected
+version/commit, a minimal reproduction and impact. Do not post
 credentials, personal data, exploit details or private logs in a public issue.
 A support declaration is not a response-time SLA or a claim that all vulnerabilities
 are known. Coordinate disclosure through that private channel.

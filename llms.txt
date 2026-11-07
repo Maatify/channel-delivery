@@ -3,7 +3,7 @@
 > Standalone PHP Composer project/service for asynchronous email, keyed atomic acceptance and isolated no-send recording. Email is implemented; other channels are planned.
 
 ## Consumer documentation
-- [README](README.md): exact artifact target, preparation snapshot, requirements and entry points.
+- [README](README.md): published release identity, live publication record, requirements and entry points.
 - [Usage guide](docs/guides/USAGE_GUIDE.md): setup and operation selection.
 - [HTTP reference](docs/CHANNEL_DELIVERY_API.md): endpoint navigation and template catalogue.
 - [Atomic v2](docs/api/email-atomic.md): Idempotency-Key, receipts and uncertain acceptance recovery.
@@ -13,7 +13,7 @@
 - [Upgrade](docs/upgrade/2.0.0.md): PHP compatibility break and explicit schema adoption.
 
 ## Release and community
-- [Release target](docs/releases/2.0.0.md): preparation state, compatibility and curated notes.
+- [Published 2.0.0](docs/releases/2.0.0.md): published-source evidence, compatibility and curated notes.
 - [Qualification checklist](docs/releases/RELEASE_CHECKLIST.md): exact-SHA gates and archive verification before publication.
 - [Security](SECURITY.md): support and private reporting.
 - [Contributing](CONTRIBUTING.md): source-clone verification.
