@@ -1,0 +1,13 @@
+# Deployable source archives keep runtime, docs, examples, .env.example and .gitignore.
+# Use a source clone for contributor tests/CI; never deploy the test HTTP router.
+/.git export-ignore
+/.github export-ignore
+/tests export-ignore
+/.phpunit* export-ignore
+/.php-cs-fixer* export-ignore
+/phpstan.neon export-ignore
+/.env export-ignore
+/vendor export-ignore
+/var export-ignore
+/storage export-ignore
+/logs export-ignore

@@ -75,7 +75,7 @@ separate host change under Athar Platform#684.
 ## Local/CI qualification
 
 `composer validate --strict`, `composer check-platform-reqs`, `composer audit`,
-`composer analyse`, PHP lint and `composer test`. Integration tests skip without
+`composer analyse`, PHP lint and `composer test` from a full source clone (see [contributing](../../CONTRIBUTING.md)); deployment archives omit test infrastructure. Integration tests skip without
 an explicit fixture, but CI sets `CHANNEL_IT_REQUIRED=1`, explicit MySQL DSN to
 `channel_delivery_test`, fixture credentials and `CHANNEL_IT_REDIS_HOST`.
 The fixture resets only service test tables, loads canonical installed SQL and

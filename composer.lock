@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "be302e26c0ec189c3eade8dab14de79b",
+    "content-hash": "cea72c052e8476a9e53b72c21bb421c9",
     "packages": [
         {
             "name": "fig/http-message-util",
@@ -6026,6 +6026,7 @@
         "ext-json": "*",
         "ext-openssl": "*",
         "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
         "ext-redis": "*",
         "ext-sodium": "*",
         "ext-zlib": "*"

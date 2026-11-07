@@ -246,5 +246,19 @@ jobs:
       # -------------------------------------------------
       - name: Lint PHP files
         run: |
-          find ./src ./tests ./config ./scripts -type f -name "*.php" -print0 \
+          find ./src ./tests ./config ./scripts ./docs/examples -type f -name "*.php" -print0 \
             | xargs -0 -n1 php -l
+
+      - name: Verify consumer example syntax
+        run: |
+          for example in examples/*.sh; do
+            bash -n "$example"
+          done
+
+      - name: Verify exact-source release artifact
+        if: matrix.php == '8.4'
+        run: |
+          release_sha="$(git rev-parse HEAD)"
+          git archive --format=zip --output="$RUNNER_TEMP/channel-delivery-2.0.0.zip" "$release_sha"
+          python3 tools/check_release_artifact.py --target 2.0.0 \
+            --archive "$RUNNER_TEMP/channel-delivery-2.0.0.zip" --source . --commit "$release_sha" --self-test

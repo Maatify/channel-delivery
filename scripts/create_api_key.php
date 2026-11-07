@@ -23,7 +23,7 @@ if ($name === '' || $ips === '') {
         '  php scripts/create_api_key.php --name=<name> --ips=<ip1,ip2,...>',
         '',
         'Example:',
-        '  php scripts/create_api_key.php --name=iam-core --ips=1.2.3.4,5.6.7.8',
+        '  php scripts/create_api_key.php --name=example-client --ips=192.0.2.10,198.51.100.10',
         '',
     ]));
     exit(1);

@@ -1,26 +1,15 @@
-php scripts/create_api_key.php --name=iam-core --ips=10.0.0.1,10.0.0.2
+# Operator command navigation
 
-✅ API key created successfully
+This legacy entry point is retained for existing links. Use the maintained
+[configuration/CLI reference](docs/reference/configuration.md) and
+[usage guide](docs/guides/USAGE_GUIDE.md).
 
-  Name : iam-core
-  IPs  : 10.0.0.1, 10.0.0.2
-  Key  : 0e786ee2e5fae08c4e4e3811215bbe8545e6c2a2026c83ed968c8c360c42c28c
+```bash
+php scripts/create_api_key.php --name=example-client --ips=127.0.0.1
+CD_BASE_URL=http://127.0.0.1:8080 CD_API_KEY='<YOUR_TEST_API_KEY>' php scripts/test_enqueue.php
+```
 
-⚠️  Save this key now — it will NOT be shown again.
-
-✅ API key created successfully
-
-  Name : iam-core
-  IPs  : 127.0.0.1
-  Key  : 85a339154b4fb7dd5f90c73f31fedc4d02b550d115264b280ac33db8e51eb09d
-
-⚠️  Save this key now — it will NOT be shown again.
-
----
-
-# تشغيل مع الـ server الـ local
-export CD_API_KEY=your_raw_key
-php scripts/test_enqueue.php
-
-# أو على server تاني
-CD_BASE_URL=http://localhost:8082 CD_API_KEY=85a339154b4fb7dd5f90c73f31fedc4d02b550d115264b280ac33db8e51eb09d php scripts/test_enqueue.php
+The key-creation command prints a newly generated raw key once. Store that value
+privately; do not paste it into documentation, issues or committed shell files.
+The diagnostic call is real v1 enqueue; point it only at an explicitly chosen test
+service with nonsensitive data. It is not a no-send or atomic-recovery example.

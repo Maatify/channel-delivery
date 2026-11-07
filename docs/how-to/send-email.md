@@ -37,6 +37,7 @@ Currently available template keys:
 * `otp`
 * `verification`
 * `welcome`
+* `admin_notification`
 
 Currently available languages for these templates:
 

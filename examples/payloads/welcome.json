@@ -1,0 +1,12 @@
+{
+  "entity_type": "example",
+  "entity_id": "decoy-1",
+  "recipient": "decoy@example.invalid",
+  "template_key": "welcome",
+  "language": "en",
+  "sender_type": 1,
+  "context": {
+    "user_name": "Example User",
+    "activation_link": "https://example.invalid/unused-activation"
+  }
+}

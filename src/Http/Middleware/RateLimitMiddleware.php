@@ -15,9 +15,9 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
- * Redis-based sliding window rate limiter.
+ * Redis-based fixed-window request counter.
  *
- * Strategy: Sliding Window Counter using Redis INCR + EXPIREAT.
+ * Strategy: Fixed windows using Redis INCR + EXPIREAT.
  *   - Key:    "rl:{identity}:{window_start}"
  *   - Window: configurable (default: 60s)
  *   - Limit:  configurable (default: 100 req/window)
@@ -64,7 +64,7 @@ final class RateLimitMiddleware implements MiddlewareInterface
             ? 'key:' . $apiKey->id
             : 'ip:' . ($request->getServerParams()['REMOTE_ADDR'] ?? 'unknown');
 
-        // ── Sliding window ────────────────────────────────────
+        // ── Fixed window ────────────────────────────────────
         $windowStart = (int) floor(time() / $this->windowSeconds) * $this->windowSeconds;
         $windowReset = $windowStart + $this->windowSeconds;
         $redisKey    = self::KEY_PREFIX . $identity . ':' . $windowStart;

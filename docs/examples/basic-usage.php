@@ -1,44 +1,34 @@
 <?php
 
-/**
- * Basic Usage Example
- *
- * Demonstrates how to enqueue an email notification by calling the
- * maatify/channel-delivery microservice from a PHP application using cURL.
- */
+declare(strict_types=1);
 
-$baseUrl = 'http://localhost:8080';
-$apiKey = 'YOUR_API_KEY_HERE';
-
-$payload = [
-    'entity_type'  => 'user',
-    'entity_id'    => '123',
-    'recipient'    => 'user@example.com',
-    'template_key' => 'welcome',
-    'language'     => 'en',
-    'sender_type'  => 1,
-    'context'      => [
-        'user_name' => 'John Doe'
-    ]
-];
-
-$ch = curl_init($baseUrl . '/api/v1/email/enqueue');
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'X-Api-Key: ' . $apiKey
-]);
-
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-if ($httpCode === 202) {
-    echo "Successfully queued email notification.\n";
-} else {
-    echo "Failed to queue email. HTTP Status: $httpCode\n";
-    echo "Response: $response\n";
+// Legacy real enqueue: explicit test URL/key, no retry or no-send semantics.
+$baseUrl = getenv('CD_BASE_URL');
+$apiKey = getenv('CD_API_KEY');
+if (!is_string($baseUrl) || $baseUrl === '' || !is_string($apiKey) || $apiKey === '') {
+    fwrite(STDERR, "Set CD_BASE_URL and CD_API_KEY for an explicit test service.\n");
+    exit(2);
 }
-
-curl_close($ch);
+$payload = file_get_contents(dirname(__DIR__, 2) . '/examples/payloads/welcome.json');
+if ($payload === false) {
+    throw new RuntimeException('Example payload is unavailable.');
+}
+$curl = curl_init(rtrim($baseUrl, '/') . '/api/v1/email/enqueue');
+if ($curl === false) {
+    throw new RuntimeException('Cannot initialize cURL.');
+}
+curl_setopt_array($curl, [
+    CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $payload,
+    CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'X-Api-Key: ' . $apiKey],
+    CURLOPT_TIMEOUT => 10,
+]);
+$response = curl_exec($curl);
+$status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+$error = curl_error($curl);
+unset($curl);
+if ($response === false) {
+    fwrite(STDERR, 'HTTP outcome unresolved: ' . $error . "\n");
+    exit(1);
+}
+echo 'HTTP ' . $status . "\n" . $response . "\n";
+exit($status === 202 ? 0 : 1);

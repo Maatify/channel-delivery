@@ -53,7 +53,7 @@ uncertain commits and fresh-session retries, four independent concurrent process
 worker restart plus a real-send positive control (fake transport only), production
 DI compilation, and trusted CLI cleanup with invalid-argument controls.
 
-With that isolated fixture configured, the optional timing smoke test is:
+From a full source clone (not a deployment archive), with that isolated fixture configured, the optional timing smoke test is:
 
 ```bash
 vendor/bin/phpunit --no-configuration --bootstrap tests/bootstrap.php \
