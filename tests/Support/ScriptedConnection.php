@@ -12,6 +12,8 @@ final class ScriptedConnection
     public ?\Throwable $batchFailure = null;
     /** Connection state after a failed batch: true keeps it answering, false drops it. */
     public bool $aliveAfterBatchFailure = true;
+    /** Raised as a PHP warning by the liveness probe, like a driver notice. */
+    public ?string $probeWarning = null;
     public int $batches = 0;
     public int $probes = 0;
 }

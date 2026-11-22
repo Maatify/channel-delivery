@@ -41,6 +41,9 @@ final class EmailWorkerRunner
     public const EXIT_CONNECTION_UNAVAILABLE = 1;
     public const DEFAULT_MAX_CONNECTION_FAILURES = 3;
 
+    /** mysqlnd notices raised while talking to a connection the server already closed. */
+    private const CONNECTION_LOSS_NOTICE = '/MySQL server has gone away|Lost connection to MySQL server|Packets out of order|Error while (?:sending|reading)|Send of \d+ bytes failed/';
+
     /** @var Closure(): PDO */
     private readonly Closure $connect;
 
@@ -179,10 +182,22 @@ final class EmailWorkerRunner
         return self::EXIT_OK;
     }
 
-    /** Liveness probe. Driver notices from a dead socket are expected here and not reported. */
+    /**
+     * Liveness probe. A dead connection is the expected failure here, so the driver's
+     * connection-loss notices (for example "Packets out of order" when MySQL 8.0.24+
+     * reports an expired wait_timeout) are not reported. Every other warning goes to
+     * the previous handler, or to PHP's standard handling when there is none.
+     */
     private function answers(PDO $pdo): bool
     {
-        set_error_handler(static fn (): bool => true);
+        $previous = null;
+        $previous = set_error_handler(static function (int $severity, string $message, string $file = '', int $line = 0) use (&$previous): bool {
+            if (preg_match(self::CONNECTION_LOSS_NOTICE, $message) === 1) {
+                return true;
+            }
+
+            return $previous !== null && $previous($severity, $message, $file, $line) !== false;
+        });
         try {
             $statement = $pdo->query('SELECT 1');
 

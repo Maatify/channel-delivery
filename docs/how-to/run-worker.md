@@ -56,6 +56,8 @@ split that transaction across two sessions.
 A connection that drops in the middle of a batch (for example during a long SMTP
 send) still fails that batch, and the rows it claimed stay `processing` until
 `scripts/recover_stuck_jobs.php` resets them. Run that script on a schedule.
+Known limitation: it compares receipt-bound rows' UTC `updated_at` with the session
+clock and fences its reset only on status; see [channel-delivery#14](https://github.com/Maatify/channel-delivery/issues/14).
 
 ## Supervisor Configuration
 

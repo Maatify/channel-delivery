@@ -258,10 +258,53 @@ final class EmailWorkerRunnerTest extends TestCase
         self::assertSame(3, $this->logger->count('Batch processed'));
     }
 
+    public function testProbeDoesNotReportTheDriverConnectionLossNotice(): void
+    {
+        $reported = $this->probeWarnings('PDO::query(): Packets out of order. Expected 1 received 0. Packet size=145');
+
+        self::assertSame([], $reported, 'A dead connection is the expected probe failure.');
+        self::assertSame(1, $this->logger->count('Worker database connection re-established'));
+    }
+
+    public function testProbeHandsEveryOtherWarningToThePreviousHandler(): void
+    {
+        $reported = $this->probeWarnings('Unrelated warning raised while probing');
+
+        self::assertSame(['Unrelated warning raised while probing'], $reported);
+    }
+
     public function testAtLeastOneConnectionFailureMustBeAllowed(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->runner([new ScriptedConnection()])->run(10, true, 0, 0);
+    }
+
+    /** @return list<string> warnings that reached the handler installed before the run */
+    private function probeWarnings(string $warning): array
+    {
+        $first = new ScriptedConnection();
+        $runner = $this->runner([$first, new ScriptedConnection()], function (int $sleeps) use ($first, $warning): void {
+            if ($sleeps === 1) {
+                $first->alive = false;
+                $first->probeWarning = $warning;
+            }
+            if ($sleeps === 2) {
+                throw new StopLoop();
+            }
+        });
+        $reported = [];
+        set_error_handler(static function (int $severity, string $message) use (&$reported): bool {
+            $reported[] = $message;
+
+            return true;
+        });
+        try {
+            $this->runUntilStopped($runner);
+        } finally {
+            restore_error_handler();
+        }
+
+        return $reported;
     }
 
     /**
@@ -318,6 +361,9 @@ final class EmailWorkerRunnerTest extends TestCase
         $pdo->method('query')->willReturnCallback(static function (string $sql) use ($script, $probe, $metadata): PDOStatement {
             if ($sql === 'SELECT 1') {
                 ++$script->probes;
+                if ($script->probeWarning !== null) {
+                    trigger_error($script->probeWarning, E_USER_WARNING);
+                }
                 if (!$script->alive) {
                     throw new PDOException('SQLSTATE[HY000]: General error: 2006 MySQL server has gone away');
                 }
