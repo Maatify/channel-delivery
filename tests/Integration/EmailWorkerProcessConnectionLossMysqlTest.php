@@ -7,9 +7,10 @@ namespace Tests\Integration;
 use Tests\Support\AtomicHttpMysqlTestCase;
 
 /**
- * Black-box: the real DI-wired worker loop in its own process. The server kills
- * the worker's connection between batches; a message accepted afterwards must
- * still be sent, and the process must keep running.
+ * Black-box: the real DI-wired worker loop in its own process. The server closes
+ * the worker's connection between batches (KILL, or its session idle timeout); a
+ * message accepted afterwards must still be sent, the process must keep running,
+ * and no PHP warning, notice or deprecation may reach its output.
  */
 final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTestCase
 {
@@ -38,17 +39,44 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
         $log = $this->log();
         self::assertStringContainsString('Worker database connection re-established', $log);
         self::assertStringNotContainsString('Worker exiting for restart', $log);
+        $this->assertCleanOutput();
+    }
+
+    public function testLoopReconnectsAfterItsSessionIdleTimeoutWithCleanOutput(): void
+    {
+        [$app] = $this->application();
+        self::assertLessThan(300, $this->request($app, key: 'idle-process-1')->getStatusCode());
+        // The worker idles 3 s between batches, past its own 2 s session wait_timeout.
+        $this->startWorker(['DB_SESSION_WAIT_TIMEOUT' => '2'], 3);
+        $this->waitForSent(1, 15.0, 'before the idle timeout');
+        sleep(4);
+
+        self::assertLessThan(300, $this->request($app, key: 'idle-process-2')->getStatusCode());
+        $this->waitForSent(2, 10.0, 'after the server closed the idle worker connection');
+
+        self::assertNotNull($this->process);
+        self::assertTrue(proc_get_status($this->process)['running']);
+        $log = $this->log();
+        self::assertStringContainsString('Worker database connection lost; reconnecting', $log);
+        self::assertStringContainsString('Worker database connection re-established', $log);
+        self::assertStringNotContainsString('Worker batch failed', $log);
+        $this->assertCleanOutput();
+    }
+
+    private function assertCleanOutput(): void
+    {
         foreach (['stdout', 'stderr'] as $stream) {
             self::assertSame('', (string) file_get_contents($this->directory . '/' . $stream), 'No PHP warnings, notices or deprecations on ' . $stream);
         }
     }
 
-    private function startWorker(): void
+    /** @param array<string, string> $environment */
+    private function startWorker(array $environment = [], int $sleep = 1): void
     {
         $this->directory = sys_get_temp_dir() . '/cd-worker-process-' . bin2hex(random_bytes(6));
         self::assertTrue(mkdir($this->directory));
         $spec = $this->directory . '/spec.json';
-        file_put_contents($spec, json_encode(['env' => $_ENV, 'log' => $this->directory . '/worker.log', 'batch' => 10, 'sleep' => 1], JSON_THROW_ON_ERROR));
+        file_put_contents($spec, json_encode(['env' => array_merge($_ENV, $environment), 'log' => $this->directory . '/worker.log', 'batch' => 10, 'sleep' => $sleep], JSON_THROW_ON_ERROR));
         $process = proc_open(
             [PHP_BINARY, '-d', 'error_reporting=-1', '-d', 'display_errors=stderr', '-d', 'log_errors=0', dirname(__DIR__) . '/Support/email-worker-process.php', $spec],
             [0 => ['pipe', 'r'], 1 => ['file', $this->directory . '/stdout', 'w'], 2 => ['file', $this->directory . '/stderr', 'w']],
