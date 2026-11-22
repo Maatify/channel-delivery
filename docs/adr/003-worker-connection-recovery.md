@@ -1,7 +1,6 @@
 # Service ADR003: worker database connection recovery and queue-stall signals
 
-Status: proposed under channel-delivery#12, **awaiting the owner's acceptance**.
-Nothing here is adopted until the owner accepts it.
+Status: accepted by owner on 2026-11-22 under channel-delivery#12, implemented in #13.
 
 ## Context
 

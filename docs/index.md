@@ -24,7 +24,7 @@ Email is implemented; Telegram, SMS and Push remain planned.
 - [Security policy](../SECURITY.md), [security mechanisms and limits](../SECURITY_AUDIT.md).
 - [Contributing](../CONTRIBUTING.md), [code of conduct](../CODE_OF_CONDUCT.md), [MIT license](../LICENSE).
 - [Service ADRs](adr/001-atomic-email-http.md) document design; [synthetic ADR](adr/002-synthetic-email-http.md) adds the no-send path.
-- [Worker connection recovery ADR](adr/003-worker-connection-recovery.md) (proposed, awaiting owner acceptance).
+- [Worker connection recovery ADR](adr/003-worker-connection-recovery.md) (accepted).
 
 The endpoint-specific contract owns its request/response rules. The template catalogue
 owns template names/fields, the configuration reference follows actual DI reads,
