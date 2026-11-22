@@ -15,7 +15,15 @@ populated process environment. Keep secrets out of source and the web document r
 | APP_NAME / SUPPORT_EMAIL |Template globals, default App / empty; configure your own branding |
 | DB_HOST / DB_PORT / DB_DATABASE |MySQL DSN, defaults127.0.0.1 /3306 /channel_delivery |
 | DB_USERNAME / DB_PASSWORD |Required database credentials |
+| DB_SESSION_WAIT_TIMEOUT |Session `wait_timeout` seconds applied on every new shared/worker connection (driver init command); empty uses 28800, MySQL's compiled default; integer 1..31536000, anything else fails the connection setup |
 | CRYPTO_ACTIVE_KEY_ID / CRYPTO_KEYS |Required JSON registry; each key material string must contain exactly32 raw bytes; no automatic hex/base64 decoding |
+
+The shared `PDO` (one per HTTP request or CLI command) and the worker's connection
+come from one factory, so both get the session settings. The factory never reconnects
+by itself, and the shared connection is never swapped: replacing a connection inside
+an open transaction would silently split that transaction across two sessions. Only
+the worker replaces its own connection, between batches. Set the timeout well above
+the worker's longest idle gap (its `--sleep` interval and the slowest single SMTP send).
 
 Keep historical read keys for retained receipts and queued jobs. Cryptographic
 contexts and binding identity must not change across retries. v2/synthetic operations
@@ -72,7 +80,8 @@ synthetic004 schema is separate from service004 consumer bindings.
 | CLI | Contract |
 | --- | --- |
 | `php scripts/create_api_key.php --name=example-client --ips=127.0.0.1` |Creates a hashed key and prints raw key once; `.env` and API-key table required |
-| `php scripts/email_worker.php --batch=50` |One batch; `--loop --sleep=5` enables repeated polling |
+| `php scripts/email_worker.php --batch=50` |One batch; `--loop --sleep=5` enables repeated polling; `--max-connection-failures=3` (1..9999) consecutive connection failures before a loop exits for restart; optional `--state-file=PATH` heartbeat. Exit 0 finished, 1 database connection unavailable, 2 bad arguments |
+| `php scripts/email_queue_status.php` |Read-only stall check: oldest due pending age and each worker's consecutive batch failures and heartbeat age as JSON. `--max-pending-age=600`, `--max-batch-failures=3`, `--max-heartbeat-age=600` (above one full worker iteration: longest batch plus `--sleep`), repeatable `--state-file=PATH`. 0 within thresholds, 1 alert or status unavailable, 2 bad arguments |
 | `php scripts/purge_synthetic_email.php --limit=100` |Trusted global cleanup of at most1..1000 expired inert rows;0 success,1 unavailable/unknown,2 bad arguments |
 | `php scripts/purge_synthetic_email.php --help` |Help without loading environment or DB |
 

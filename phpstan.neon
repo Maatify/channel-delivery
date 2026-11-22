@@ -8,3 +8,11 @@ parameters:
 
     excludePaths:
         - vendor
+
+    ignoreErrors:
+        # PHPStan 1.12 does not know the PHP 8.4 driver constants. PHP 8.5 deprecates
+        # PDO::MYSQL_ATTR_INIT_COMMAND in favour of Pdo\Mysql::ATTR_INIT_COMMAND (same value).
+        -
+            message: '#^Access to undefined constant Pdo\\Mysql::ATTR_INIT_COMMAND\.$#'
+            path: src/Database/PdoConnectionFactory.php
+            count: 1

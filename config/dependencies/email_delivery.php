@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Maatify\ChannelDelivery\Database\PdoConnectionFactory;
 use Maatify\ChannelDelivery\Email\AtomicEmailConnectionFactory;
 use Maatify\ChannelDelivery\Email\AtomicEmailGateway;
 use Maatify\ChannelDelivery\Email\SyntheticEmailGateway;
@@ -21,6 +22,8 @@ use Maatify\EmailDelivery\Renderer\TwigEmailRenderer;
 use Maatify\EmailDelivery\Transport\EmailTransportInterface;
 use Maatify\EmailDelivery\Transport\SmtpEmailTransport;
 use Maatify\EmailDelivery\Worker\EmailQueueWorker;
+use Maatify\ChannelDelivery\Worker\EmailWorkerRunner;
+use Psr\Log\LoggerInterface;
 
 use function DI\autowire;
 use function DI\factory;
@@ -94,5 +97,22 @@ return [
     // LoggerInterface is resolved from the container (defined in crypto.php).
     // EmailQueueWorker now requires a logger for structured failure reporting.
     EmailQueueWorker::class          => autowire(EmailQueueWorker::class),
+
+    // The long-running worker owns its connection: it opens it from the factory and
+    // rebuilds connection + worker after a lost connection, between batches only.
+    EmailWorkerRunner::class => factory(function (
+        PdoConnectionFactory $connections,
+        CryptoProvider $crypto,
+        EmailRendererInterface $renderer,
+        EmailTransportInterface $transport,
+        CryptoContextProviderInterface $contexts,
+        LoggerInterface $logger,
+    ): EmailWorkerRunner {
+        return new EmailWorkerRunner(
+            $connections->create(...),
+            static fn (PDO $pdo): EmailQueueWorker => new EmailQueueWorker($pdo, $crypto, $renderer, $transport, $contexts, $logger),
+            $logger,
+        );
+    }),
 
 ];
