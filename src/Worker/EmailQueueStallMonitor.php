@@ -15,16 +15,20 @@ use PDO;
  *   row became eligible for the worker (scheduled_at reached and any retry_after
  *   passed), measured with the same clocks the worker uses. Rows scheduled for
  *   the future or waiting out a retry backoff are pending on purpose and not counted.
- * - each worker's consecutive batch failures, read from its state file.
+ * - each worker's consecutive batch failures and heartbeat age, read from its state
+ *   file. The worker rewrites that file once per loop iteration, so a heartbeat older
+ *   than one full iteration (the longest batch plus the sleep interval) means the
+ *   worker stopped or hangs, even when its last counters looked healthy.
  *
  * @phpstan-type QueueSnapshot array{due_pending: int, oldest_due_pending_age_seconds: int|null}
  * @phpstan-type WorkerReport array{state_file: string, available: bool, pid?: int, updated_seconds_ago?: int, consecutive_batch_failures?: int, consecutive_connection_failures?: int, last_batch_succeeded_at?: int|null}
- * @phpstan-type Report array{status: 'ok'|'alert', alerts: list<string>, queue: QueueSnapshot, workers: list<WorkerReport>, thresholds: array{max_pending_age_seconds: int, max_batch_failures: int}}
+ * @phpstan-type Report array{status: 'ok'|'alert', alerts: list<string>, queue: QueueSnapshot, workers: list<WorkerReport>, thresholds: array{max_pending_age_seconds: int, max_batch_failures: int, max_heartbeat_age_seconds: int}}
  */
 final readonly class EmailQueueStallMonitor
 {
     public const DEFAULT_MAX_PENDING_AGE_SECONDS = 600;
     public const DEFAULT_MAX_BATCH_FAILURES = 3;
+    public const DEFAULT_MAX_HEARTBEAT_AGE_SECONDS = 600;
 
     private const TABLE = 'cd_email_queue';
 
@@ -70,7 +74,7 @@ final readonly class EmailQueueStallMonitor
      *
      * @return Report
      */
-    public function report(int $maxPendingAgeSeconds, int $maxBatchFailures, array $stateFiles, int $now): array
+    public function report(int $maxPendingAgeSeconds, int $maxBatchFailures, int $maxHeartbeatAgeSeconds, array $stateFiles, int $now): array
     {
         $queue = $this->queue();
         $alerts = [];
@@ -86,15 +90,19 @@ final readonly class EmailQueueStallMonitor
                 $alerts[] = 'worker_state_unavailable';
                 continue;
             }
+            $updatedSecondsAgo = max(0, $now - $state->updatedAt);
             $workers[] = [
                 'state_file'                      => $path,
                 'available'                       => true,
                 'pid'                             => $state->pid,
-                'updated_seconds_ago'             => max(0, $now - $state->updatedAt),
+                'updated_seconds_ago'             => $updatedSecondsAgo,
                 'consecutive_batch_failures'      => $state->consecutiveBatchFailures,
                 'consecutive_connection_failures' => $state->consecutiveConnectionFailures,
                 'last_batch_succeeded_at'         => $state->lastBatchSucceededAt,
             ];
+            if ($updatedSecondsAgo > $maxHeartbeatAgeSeconds) {
+                $alerts[] = 'worker_heartbeat_stale';
+            }
             if ($state->consecutiveBatchFailures >= $maxBatchFailures) {
                 $alerts[] = 'consecutive_batch_failures';
             }
@@ -106,7 +114,11 @@ final readonly class EmailQueueStallMonitor
             'alerts'     => $alerts,
             'queue'      => $queue,
             'workers'    => $workers,
-            'thresholds' => ['max_pending_age_seconds' => $maxPendingAgeSeconds, 'max_batch_failures' => $maxBatchFailures],
+            'thresholds' => [
+                'max_pending_age_seconds'   => $maxPendingAgeSeconds,
+                'max_batch_failures'        => $maxBatchFailures,
+                'max_heartbeat_age_seconds' => $maxHeartbeatAgeSeconds,
+            ],
         ];
     }
 

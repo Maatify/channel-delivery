@@ -51,22 +51,22 @@ final class EmailQueueStallMonitorMysqlTest extends AtomicHttpMysqlTestCase
         $missing = sys_get_temp_dir() . '/cd-worker-state-missing-' . bin2hex(random_bytes(6)) . '.json';
         $monitor = new EmailQueueStallMonitor($this->session);
 
-        $calm = $monitor->report(600, 3, [$healthy], time());
+        $calm = $monitor->report(600, 3, 600, [$healthy], time());
         self::assertSame('ok', $calm['status']);
         self::assertSame([], $calm['alerts']);
         self::assertSame(0, $calm['workers'][0]['consecutive_batch_failures'] ?? null);
         self::assertEqualsWithDelta(4, $calm['workers'][0]['updated_seconds_ago'] ?? -1, 2);
 
-        $stalled = $monitor->report(200, 3, [$healthy, $failing, $missing], time());
+        $stalled = $monitor->report(200, 3, 600, [$healthy, $failing, $missing], time());
         self::assertSame('alert', $stalled['status']);
         self::assertSame(['oldest_due_pending_age', 'consecutive_batch_failures', 'worker_state_unavailable'], $stalled['alerts']);
         self::assertSame(3, $stalled['workers'][1]['consecutive_batch_failures'] ?? null);
         self::assertSame(1, $stalled['workers'][1]['consecutive_connection_failures'] ?? null);
         self::assertFalse($stalled['workers'][2]['available']);
-        self::assertSame(['max_pending_age_seconds' => 200, 'max_batch_failures' => 3], $stalled['thresholds']);
+        self::assertSame(['max_pending_age_seconds' => 200, 'max_batch_failures' => 3, 'max_heartbeat_age_seconds' => 600], $stalled['thresholds']);
 
-        self::assertSame(['consecutive_batch_failures'], $monitor->report(600, 3, [$failing], time())['alerts']);
-        self::assertSame('ok', $monitor->report(600, 4, [$failing], time())['status'], 'Below the failure threshold.');
+        self::assertSame(['consecutive_batch_failures'], $monitor->report(600, 3, 600, [$failing], time())['alerts']);
+        self::assertSame('ok', $monitor->report(600, 4, 600, [$failing], time())['status'], 'Below the failure threshold.');
     }
 
     public function testStatusScriptPrintsTheReportWithMonitoringExitCodes(): void
@@ -94,6 +94,64 @@ final class EmailQueueStallMonitorMysqlTest extends AtomicHttpMysqlTestCase
         [$code, $output] = $this->script([], ['DB_PORT' => '1']);
         self::assertSame(1, $code);
         self::assertSame('{"status":"unavailable"}', trim($output));
+    }
+
+    public function testStatusScriptAlertsOnAStaleHeartbeatByDefault(): void
+    {
+        // Empty queue, and a valid state file with no failures last written an hour ago:
+        // the worker stopped or hangs, so this must not read as healthy.
+        $stale = $this->stateFile(new EmailWorkerState(103, time() - 3600, 0, 0, time() - 3600));
+
+        [$code, $output] = $this->script(['--state-file=' . $stale]);
+
+        self::assertSame(1, $code, $output);
+        $report = json_decode($output, true, 16, JSON_THROW_ON_ERROR);
+        self::assertIsArray($report);
+        self::assertSame('alert', $report['status']);
+        self::assertSame(['worker_heartbeat_stale'], $report['alerts']);
+    }
+
+    public function testHeartbeatOlderThanTheThresholdAlertsAndTheBoundaryIsHealthy(): void
+    {
+        $now = 1_800_000_000;
+        $fresh = $this->stateFile(new EmailWorkerState(201, $now - 5, 0, 0, $now - 5));
+        $boundary = $this->stateFile(new EmailWorkerState(202, $now - 600, 0, 0, $now - 600));
+        $stale = $this->stateFile(new EmailWorkerState(203, $now - 601, 0, 0, $now - 601));
+        $staleAndFailing = $this->stateFile(new EmailWorkerState(204, $now - 3600, 3, 3, null));
+        $monitor = new EmailQueueStallMonitor($this->session);
+
+        self::assertSame('ok', $monitor->report(600, 3, 600, [$fresh], $now)['status']);
+        $atBoundary = $monitor->report(600, 3, 600, [$boundary], $now);
+        self::assertSame('ok', $atBoundary['status'], 'Exactly the threshold is still fresh.');
+        self::assertSame(600, $atBoundary['workers'][0]['updated_seconds_ago'] ?? null);
+
+        $justStale = $monitor->report(600, 3, 600, [$fresh, $stale], $now);
+        self::assertSame('alert', $justStale['status']);
+        self::assertSame(['worker_heartbeat_stale'], $justStale['alerts']);
+        self::assertSame(601, $justStale['workers'][1]['updated_seconds_ago'] ?? null);
+
+        self::assertSame(['worker_heartbeat_stale', 'consecutive_batch_failures'], $monitor->report(600, 3, 600, [$staleAndFailing], $now)['alerts']);
+        self::assertSame('ok', $monitor->report(600, 3, 601, [$stale], $now)['status'], 'A longer threshold accepts it.');
+    }
+
+    public function testStatusScriptValidatesAndHonoursTheHeartbeatThreshold(): void
+    {
+        $hourOld = $this->stateFile(new EmailWorkerState(205, time() - 3600, 0, 0, time() - 3600));
+
+        [$code, $output] = $this->script(['--max-heartbeat-age=7200', '--state-file=' . $hourOld]);
+        self::assertSame(0, $code, $output);
+        $report = json_decode($output, true, 16, JSON_THROW_ON_ERROR);
+        self::assertIsArray($report);
+        self::assertIsArray($report['thresholds'] ?? null);
+        self::assertSame(7200, $report['thresholds']['max_heartbeat_age_seconds'] ?? null);
+
+        [$code] = $this->script(['--max-heartbeat-age=60', '--state-file=' . $hourOld]);
+        self::assertSame(1, $code);
+
+        foreach (['--max-heartbeat-age=0', '--max-heartbeat-age=-5', '--max-heartbeat-age=ten', '--max-heartbeat-age=', '--max-heartbeat-age=1234567890'] as $invalid) {
+            [$code] = $this->script([$invalid]);
+            self::assertSame(2, $code, $invalid);
+        }
     }
 
     private function seedQueue(?PDO $session = null): void

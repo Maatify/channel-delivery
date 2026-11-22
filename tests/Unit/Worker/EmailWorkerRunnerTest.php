@@ -163,8 +163,14 @@ final class EmailWorkerRunnerTest extends TestCase
         self::assertSame(1, $scripts[0]->batches);
         self::assertSame(1, $scripts[2]->batches);
         self::assertSame(0, $scripts[3]->batches);
-        self::assertSame(3, $this->logger->count('Worker batch failed'));
-        self::assertSame(1, $this->logger->count('Worker exiting for restart: database connection unavailable'));
+        // Log taxonomy (docs/how-to/run-worker.md): a lost batch logs an error, never the connect warning,
+        // and the last one is followed by the critical exit record.
+        self::assertSame(['Worker batch failed', 'Worker batch failed', 'Worker batch failed'], $this->logger->messages('error'));
+        self::assertSame([], $this->logger->messages('warning'));
+        self::assertSame(['Worker exiting for restart: database connection unavailable'], $this->logger->messages('critical'));
+        self::assertSame(['Worker started', 'Worker database connection re-established', 'Worker database connection re-established'], $this->logger->messages('info'));
+        $last = $this->logger->records[array_key_last($this->logger->records)];
+        self::assertSame('critical', $last['level']);
     }
 
     public function testConnectionLeftInsideATransactionIsNeverReused(): void

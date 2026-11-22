@@ -81,7 +81,7 @@ synthetic004 schema is separate from service004 consumer bindings.
 | --- | --- |
 | `php scripts/create_api_key.php --name=example-client --ips=127.0.0.1` |Creates a hashed key and prints raw key once; `.env` and API-key table required |
 | `php scripts/email_worker.php --batch=50` |One batch; `--loop --sleep=5` enables repeated polling; `--max-connection-failures=3` (1..9999) consecutive connection failures before a loop exits for restart; optional `--state-file=PATH` heartbeat. Exit 0 finished, 1 database connection unavailable, 2 bad arguments |
-| `php scripts/email_queue_status.php` |Read-only stall check: oldest due pending age and each worker's consecutive batch failures as JSON. `--max-pending-age=600`, `--max-batch-failures=3`, repeatable `--state-file=PATH`. 0 within thresholds, 1 alert or status unavailable, 2 bad arguments |
+| `php scripts/email_queue_status.php` |Read-only stall check: oldest due pending age and each worker's consecutive batch failures and heartbeat age as JSON. `--max-pending-age=600`, `--max-batch-failures=3`, `--max-heartbeat-age=600` (above one full worker iteration: longest batch plus `--sleep`), repeatable `--state-file=PATH`. 0 within thresholds, 1 alert or status unavailable, 2 bad arguments |
 | `php scripts/purge_synthetic_email.php --limit=100` |Trusted global cleanup of at most1..1000 expired inert rows;0 success,1 unavailable/unknown,2 bad arguments |
 | `php scripts/purge_synthetic_email.php --help` |Help without loading environment or DB |
 

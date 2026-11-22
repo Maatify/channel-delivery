@@ -32,8 +32,9 @@ the server's global `wait_timeout`.
 - The HTTP path keeps one shared connection per request and never reconnects:
   swapping a connection inside an open transaction would silently split it.
 - Stall signals come from a read-only CLI, not `/health`: the age of the oldest due
-  pending message (by the worker's own due clocks) and each worker's consecutive
-  batch failures from an optional per-process state file. `/health` stays an API
+  pending message (by the worker's own due clocks), and each worker's consecutive
+  batch failures and heartbeat age from an optional per-process state file. A
+  heartbeat older than one full iteration (longest batch plus sleep) alerts as stale. `/health` stays an API
   liveness check with its existing contract; worker counters live in another process.
 - The library's package API is unchanged. The in-batch half (idle connection during
   a long send, retrying the status write, a processing lease) belongs to

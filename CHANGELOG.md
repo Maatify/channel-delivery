@@ -14,7 +14,7 @@ Other batch errors keep the previous log-and-continue behavior, and the log dist
 ### Added
 
 `DB_SESSION_WAIT_TIMEOUT`, applied as the session `wait_timeout` on every new shared and worker connection (default 28800).
-Read-only `scripts/email_queue_status.php` with the age of the oldest due pending message, each worker's consecutive batch failures (optional `--state-file` heartbeat) and suggested alert thresholds.
+Read-only `scripts/email_queue_status.php` with the age of the oldest due pending message, each worker's consecutive batch failures and heartbeat freshness (optional `--state-file` heartbeat, stale after `--max-heartbeat-age`) and suggested alert thresholds.
 Proposed ADR003, awaiting the owner's acceptance; worker guide with exit codes, Supervisor and systemd examples.
 
 ## [2.0.0] - 2026-11-07
