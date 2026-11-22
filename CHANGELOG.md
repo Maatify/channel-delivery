@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+The long-running email worker no longer loops forever on a lost database connection (channel-delivery#12).
+Before each batch it checks its connection and rebuilds the connection and the worker from the connection factory.
+After `--max-connection-failures` (default 3) consecutive connection failures it exits with code 1 so the process manager restarts it.
+Other batch errors keep the previous log-and-continue behavior, and the log distinguishes a reconnect from an exit for restart.
+
+### Added
+
+`DB_SESSION_WAIT_TIMEOUT`, applied as the session `wait_timeout` on every new shared and worker connection (default 28800).
+Read-only `scripts/email_queue_status.php` with the age of the oldest due pending message, each worker's consecutive batch failures (optional `--state-file` heartbeat) and suggested alert thresholds.
+Proposed ADR003, awaiting the owner's acceptance; worker guide with exit codes, Supervisor and systemd examples.
+
 ## [2.0.0] - 2026-11-07
 
 Published as [v2.0.0](https://github.com/Maatify/channel-delivery/releases/tag/v2.0.0).

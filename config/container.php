@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use DI\ContainerBuilder;
+use Maatify\ChannelDelivery\Database\PdoConnectionFactory;
 use Maatify\PsrLogger\LoggerFactory;
 use Psr\Log\LoggerInterface;
 
@@ -15,20 +16,18 @@ if (($_ENV['APP_ENV'] ?? 'production') === 'production') {
 }
 
 // ── Core ──────────────────────────────────────────────────────
+// The shared and worker connections come from one factory that applies the
+// service's session settings (DB_SESSION_WAIT_TIMEOUT) on each new connection.
+// PDO::class is the single shared connection of an HTTP request or CLI command.
+// It is never swapped for a new one: replacing it inside an open transaction
+// would silently split that transaction. Only the email worker replaces its own
+// connection, and only between batches (see EmailWorkerRunner).
 $builder->addDefinitions([
-    PDO::class => factory(function (): PDO {
-        $dsn = sprintf(
-            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-            $_ENV['DB_HOST']     ?? '127.0.0.1',
-            $_ENV['DB_PORT']     ?? '3306',
-            $_ENV['DB_DATABASE'] ?? 'channel_delivery'
-        );
-
-        return new PDO($dsn, $_ENV['DB_USERNAME'], $_ENV['DB_PASSWORD'], [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]);
+    PdoConnectionFactory::class => factory(function (): PdoConnectionFactory {
+        return PdoConnectionFactory::fromEnvironment($_ENV);
+    }),
+    PDO::class => factory(function (PdoConnectionFactory $connections): PDO {
+        return $connections->create();
     }),
 ]);
 

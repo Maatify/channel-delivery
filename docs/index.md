@@ -13,7 +13,7 @@ Email is implemented; Telegram, SMS and Push remain planned.
 
 ## Operators
 
-- [Worker](how-to/run-worker.md).
+- [Worker](how-to/run-worker.md): connection recovery, exit codes and queue-stall monitoring.
 - [Atomic schema/binding rollout and recovery](how-to/atomic-email-rollout.md).
 - [Synthetic schema, retention and bounded maintenance](how-to/synthetic-email-operations.md).
 - [Upgrade to project 2.0.0](upgrade/2.0.0.md).
@@ -24,6 +24,7 @@ Email is implemented; Telegram, SMS and Push remain planned.
 - [Security policy](../SECURITY.md), [security mechanisms and limits](../SECURITY_AUDIT.md).
 - [Contributing](../CONTRIBUTING.md), [code of conduct](../CODE_OF_CONDUCT.md), [MIT license](../LICENSE).
 - [Service ADRs](adr/001-atomic-email-http.md) document design; [synthetic ADR](adr/002-synthetic-email-http.md) adds the no-send path.
+- [Worker connection recovery ADR](adr/003-worker-connection-recovery.md) (proposed, awaiting owner acceptance).
 
 The endpoint-specific contract owns its request/response rules. The template catalogue
 owns template names/fields, the configuration reference follows actual DI reads,

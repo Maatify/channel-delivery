@@ -55,7 +55,7 @@ final class WorkerTest extends TestCase
         $loggerMock->expects($this->exactly(3)) // start, processed, finished
             ->method('info');
 
-        $runner = new EmailWorkerRunner($workerMock, $loggerMock);
+        $runner = new EmailWorkerRunner(static fn (): \PDO => $pdoMock, static fn (\PDO $pdo): EmailQueueWorker => $workerMock, $loggerMock);
 
         // Act
         $runner->run(10, false, 0);
@@ -94,7 +94,7 @@ final class WorkerTest extends TestCase
             ->method('error')
             ->with($this->stringContains('Worker batch failed'));
 
-        $runner = new EmailWorkerRunner($workerMock, $loggerMock);
+        $runner = new EmailWorkerRunner(static fn (): \PDO => $pdoMock, static fn (\PDO $pdo): EmailQueueWorker => $workerMock, $loggerMock);
 
         // Act
         $runner->run(10, false, 0);
