@@ -101,7 +101,7 @@ the worker stays stopped even after the database is back. With `startsecs=0`, ev
 exit is a normal restart, and Supervisor keeps restarting the worker until the
 database answers. Supervisor restarts it right away (about once a second in a test
 run), so keep the default `--max-connection-failures=3` and `--sleep=5` to restart
-less often: each process then lives about 10 seconds while the database is down. If a
+less often: each process then lives at least about 10 seconds while the database is down. If a
 worker does stop for good, its heartbeat goes stale and the
 [stall monitor](#monitor-queue-stalls) reports `worker_heartbeat_stale`.
 
@@ -171,14 +171,22 @@ batch failures (`--max-batch-failures`), a worker's heartbeat is older than
 **600 seconds** (`--max-heartbeat-age`, alert `worker_heartbeat_stale`), a listed state
 file is missing or invalid, or the script itself reports `unavailable`.
 
-Set `--max-heartbeat-age` above one full worker iteration: the longest batch plus the
-`--sleep` interval. The longest batch is roughly `--batch` times the slowest single
-send, so with `--batch=50`, `MAIL_TIMEOUT=10` and `--sleep=5` one iteration can take
-about 505 seconds, which the 600-second default covers. Raise it if you use larger
-batches or slower transports, or the alert fires while a healthy worker is mid-batch. A healthy worker with the default
-`--sleep=5` drains due messages within seconds, unless the backlog is larger than
-its throughput. Raise the age threshold if your normal backlog takes longer to drain.
-For example, run it every minute from cron and alert on a non-zero exit.
+A healthy worker with the default `--sleep=5` drains due messages within seconds,
+unless the backlog is larger than its throughput. Raise `--max-pending-age` if your
+normal backlog takes longer to drain.
+
+Size `--max-heartbeat-age` from the iteration time you observe. The worker writes its
+heartbeat once per loop iteration, so the threshold must exceed the longest iteration:
+the slowest batch plus `--sleep`. There is no hard upper bound on one batch. A batch
+sends up to `--batch` messages one after another, and `MAIL_TIMEOUT` limits each socket
+operation of a send, not the whole send: connecting, TLS, authentication, each SMTP
+command and the message data can each take up to that long. Measure the iteration time
+under real load, for example from the spacing of `Batch processed` records, and set
+the threshold to the worst case you see plus a margin. 600 seconds is a starting
+point, not a guarantee. Too low a threshold alerts on a healthy worker in the middle
+of a long batch.
+
+For example, run the script every minute from cron and alert on a non-zero exit.
 
 The worker consumes only the real queue. Synthetic records need the separate
 [trusted cleanup CLI](synthetic-email-operations.md), never a worker schedule.
