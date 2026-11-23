@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
   ([#15](https://github.com/Maatify/channel-delivery/issues/15)).
 - Exit with code 1 after consecutive database connection failures so the process
   manager can restart the worker ([#12](https://github.com/Maatify/channel-delivery/issues/12)).
+- Reject invalid worker arguments and unsupported SMTP encryption values at startup.
+- Write the worker heartbeat through an exclusive temporary file and bound status
+  reads. Document lease sizing and rollback with the previous release's cache layout.
 
 ### Added
 

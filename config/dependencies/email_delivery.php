@@ -34,6 +34,11 @@ return [
 
     // ── SMTP Config ───────────────────────────────────────────
     EmailTransportConfigDTO::class   => factory(function (): EmailTransportConfigDTO {
+        $encryption = $_ENV['MAIL_ENCRYPTION'] ?? null;
+        if (!in_array($encryption, ['tls', 'ssl', '', null], true)) {
+            throw new InvalidArgumentException('MAIL_ENCRYPTION must be tls, ssl or empty.');
+        }
+
         return new EmailTransportConfigDTO(
             host          : (string)$_ENV['MAIL_HOST'],
             port          : (int)$_ENV['MAIL_PORT'],
@@ -41,7 +46,7 @@ return [
             password      : (string)$_ENV['MAIL_PASSWORD'],
             fromAddress   : (string)$_ENV['MAIL_FROM_ADDRESS'],
             fromName      : (string)$_ENV['MAIL_FROM_NAME'],
-            encryption    : $_ENV['MAIL_ENCRYPTION'] ?? null,
+            encryption    : $encryption,
             timeoutSeconds: (int)($_ENV['MAIL_TIMEOUT'] ?? 10),
             debugLevel    : (int)($_ENV['MAIL_DEBUG_LEVEL'] ?? 0),
         );

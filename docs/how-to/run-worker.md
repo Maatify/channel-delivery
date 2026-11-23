@@ -18,13 +18,18 @@ php scripts/email_worker.php --batch=50 --loop --sleep=5
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--batch=N` | 50 | Jobs claimed per batch |
+| `--batch=N` | 50 | Positive integer number of jobs claimed per batch |
 | `--loop` | off | Keep polling; without it one batch runs |
-| `--sleep=N` | 5 | Seconds between loop iterations |
+| `--sleep=N` | 5 | Nonnegative integer seconds between loop iterations |
 | `--max-connection-failures=N` | 3 | Consecutive database connection failures (1..9999) before a loop exits for restart |
 | `--state-file=PATH` | none | Per-process JSON heartbeat for the [stall monitor](#monitor-queue-stalls) |
 
-Exit codes: `0` finished, `1` database connection unavailable, `2` bad arguments.
+The worker exits `0` when a one-shot run ends without an unavailable connection,
+`1` on database connection failure or after reaching the reconnect limit in loop
+mode, and `2` on invalid arguments. A one-shot run with a batch error on a usable
+session logs the failure even though its exit code is `0`. Use the worker log and
+queue status report to verify processing. Valued options accept `--name=value`
+or `--name value`.
 
 ## Database connection and recovery
 
@@ -53,11 +58,19 @@ keeps its request-scoped connections.
 
 ## Processing lease
 
-Each claim stamps `updated_at` and renews the lease immediately before rendering and
-sending each row. Set `EMAIL_PROCESSING_LEASE_SECONDS` above the longest expected
-single render and SMTP send. Empty configuration selects the default of 300 seconds.
-The existing TIMESTAMP stores an instant, so lease age is independent of fixed
-offsets or daylight saving time in database sessions.
+Each claim initially stamps `updated_at` for the entire batch. The worker then
+renews each row immediately before rendering and sending it. Size
+`EMAIL_PROCESSING_LEASE_SECONDS` to cover both the longest wait for a claimed row
+to reach that renewal and the longest render, send and status write after renewal.
+Use the longest expected full batch duration plus a margin as a conservative
+starting point. Reduce `--batch` or raise the lease if messages near the end of
+the batch could expire while waiting. A competing worker can reclaim an expired
+row and use another attempt, including when the first worker has yet to send it.
+An empty setting selects the 300-second default.
+
+The service's TIMESTAMP lease compares instants. For MySQL older than 8.0.19,
+use a fixed-offset or UTC worker session zone to avoid ambiguous lease stamps
+during daylight saving transitions.
 
 If the send succeeds but the status cannot be saved, the engine logs
 `Email sent but status write failed`. A later batch can reclaim the row after its
@@ -86,8 +99,10 @@ redirect_stderr=true
 stdout_logfile=/path/to/channel-delivery/var/log/email_worker.log
 ```
 
-Give each process its own `--state-file`; the directory must exist and be writable
-by the worker user.
+Give each process its own `--state-file` in an existing local directory writable by
+the worker and readable by the monitor. Keep that directory outside the public
+document root and restrict writes to the worker account and deployment operators.
+Create the directory for `stdout_logfile` before loading the Supervisor configuration.
 
 Keep `startsecs=0`. With Supervisor's default `startsecs=1`, a worker that exits within
 its first second counts as a failed start. That happens, for example, with
@@ -175,10 +190,10 @@ normal backlog takes longer to drain.
 Size `--max-heartbeat-age` from the iteration time you observe. The worker writes its
 heartbeat once per loop iteration, so the threshold must exceed the longest iteration:
 the slowest batch plus `--sleep`. There is no hard upper bound on one batch. A batch
-sends up to `--batch` messages one after another, and `MAIL_TIMEOUT` limits each socket
-operation of a send, not the whole send: connecting, TLS, authentication, each SMTP
-command and the message data can each take up to that long. Measure the iteration time
-under real load, for example from the spacing of `Batch processed` records, and set
+sends up to `--batch` messages one after another. `MAIL_TIMEOUT` configures the
+SMTP client's connection and stream timeout. Response waiting also has its own
+timers, so use measured iteration times under real load and failures when sizing
+the heartbeat threshold. Check the spacing of `Batch processed` records and set
 the threshold to the worst case you see plus a margin. 600 seconds is a starting
 point, not a guarantee. Too low a threshold alerts on a healthy worker in the middle
 of a long batch.

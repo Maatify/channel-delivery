@@ -14,6 +14,8 @@ use Psr\Log\LoggerInterface;
  */
 final class EmailWorkerStateFile
 {
+    private const MAX_DOCUMENT_BYTES = 4096;
+
     private bool $failing = false;
 
     public function __construct(
@@ -24,7 +26,6 @@ final class EmailWorkerStateFile
 
     public function write(EmailWorkerState $state): void
     {
-        $temporary = $this->path . '.' . getmypid() . '.tmp';
         $problem = null;
         set_error_handler(static function (int $severity, string $message) use (&$problem): bool {
             $problem = $message;
@@ -32,11 +33,10 @@ final class EmailWorkerStateFile
             return true;
         });
         try {
-            $written = file_put_contents($temporary, json_encode($state->toArray(), JSON_THROW_ON_ERROR) . "\n") !== false
-                && rename($temporary, $this->path);
-            if (!$written && is_file($temporary)) {
-                unlink($temporary);
-            }
+            $written = $this->writeAtomically(json_encode($state->toArray(), JSON_THROW_ON_ERROR) . "\n");
+        } catch (\Random\RandomException $failure) {
+            $written = false;
+            $problem = $failure->getMessage();
         } finally {
             restore_error_handler();
         }
@@ -49,14 +49,33 @@ final class EmailWorkerStateFile
         $this->failing = !$written;
     }
 
+    private function writeAtomically(string $document): bool
+    {
+        $temporary = $this->path . '.' . bin2hex(random_bytes(8)) . '.tmp';
+        $handle = fopen($temporary, 'xb');
+        if ($handle === false) {
+            return false;
+        }
+
+        $bytesWritten = fwrite($handle, $document);
+        $closed = fclose($handle);
+        if ($bytesWritten === strlen($document) && $closed && rename($temporary, $this->path)) {
+            return true;
+        }
+        // Remove only the file created by this call.
+        unlink($temporary);
+
+        return false;
+    }
+
     /** Null when the file is missing, unreadable or not a worker state document. */
     public static function read(string $path): ?EmailWorkerState
     {
-        if (!is_file($path) || !is_readable($path)) {
+        if (is_link($path) || !is_file($path)) {
             return null;
         }
-        $contents = file_get_contents($path);
-        if ($contents === false) {
+        $contents = @file_get_contents($path, false, null, 0, self::MAX_DOCUMENT_BYTES + 1);
+        if ($contents === false || strlen($contents) > self::MAX_DOCUMENT_BYTES) {
             return null;
         }
         try {

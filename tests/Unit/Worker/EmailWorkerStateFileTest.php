@@ -33,6 +33,27 @@ final class EmailWorkerStateFileTest extends TestCase
         self::assertSame([$this->path], glob($this->path . '*'));
     }
 
+    public function testOversizedStateIsUnavailable(): void
+    {
+        (new EmailWorkerStateFile($this->path, new NullLogger()))->write(new EmailWorkerState(7, 1700000000, 0, 0, null));
+        self::assertNotFalse(file_put_contents($this->path, str_repeat(' ', 4096), FILE_APPEND));
+
+        self::assertNull(EmailWorkerStateFile::read($this->path));
+    }
+
+    public function testFailedReplacementLeavesNoTemporaryFile(): void
+    {
+        self::assertTrue(mkdir($this->path));
+        try {
+            (new EmailWorkerStateFile($this->path, new NullLogger()))->write(new EmailWorkerState(7, 1700000000, 0, 0, null));
+
+            self::assertDirectoryExists($this->path);
+            self::assertSame([$this->path], glob($this->path . '*'));
+        } finally {
+            rmdir($this->path);
+        }
+    }
+
     public function testMissingOrInvalidDocumentsReadAsUnavailable(): void
     {
         self::assertNull(EmailWorkerStateFile::read($this->path));

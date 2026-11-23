@@ -169,6 +169,29 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
         self::assertSame(1, $this->transport->calls, 'The loop recovers on the same connection once the table is back.');
     }
 
+    public function testLegacyOnlySchemaEnqueuesAndRecoversWithoutTheOptionalTables(): void
+    {
+        $this->pdo->exec('DROP TABLE cd_email_synthetic_requests, cd_email_consumer_bindings, cd_email_enqueue_receipts');
+        $this->pdo->exec('ALTER TABLE cd_email_queue DROP INDEX uq_email_queue_enqueue_receipt, DROP COLUMN enqueue_receipt_id');
+
+        [$app, $container] = $this->application();
+        $shared = $container->get(PDO::class);
+        self::assertInstanceOf(PDO::class, $shared);
+        $shared->exec('SET SESSION time_zone = DEFAULT');
+        self::assertSame(202, $this->request($app, path: '/api/v1/email/enqueue')->getStatusCode());
+        self::assertSame(202, $this->request($app, path: '/api/v1/email/enqueue')->getStatusCode());
+        $this->pdo->exec("UPDATE cd_email_queue SET status='processing', attempts=1, updated_at=NOW() - INTERVAL 360 SECOND WHERE id=1");
+        $runner = $container->get(EmailWorkerRunner::class);
+        self::assertInstanceOf(EmailWorkerRunner::class, $runner);
+
+        self::assertSame(EmailWorkerRunner::EXIT_OK, $runner->run(10, false, 0));
+        self::assertSame(2, $this->transport->calls);
+        self::assertSame('1:sent:2,2:sent:1', self::scalar(
+            $this->pdo,
+            "SELECT GROUP_CONCAT(CONCAT(id, ':', status, ':', attempts) ORDER BY id) FROM cd_email_queue"
+        ));
+    }
+
     public function testServiceSchemaReclaimsExpiredLeasesAndSettlesTheAttemptCap(): void
     {
         [$app, $container] = $this->application();
