@@ -57,10 +57,29 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
         self::assertNotNull($this->process);
         self::assertTrue(proc_get_status($this->process)['running']);
         $log = $this->log();
-        self::assertStringContainsString('Worker database connection lost; reconnecting', $log);
+        self::assertStringContainsString('Email queue connection was closed by the server; reconnecting before the claim', $log);
         self::assertStringContainsString('Worker database connection re-established', $log);
         self::assertStringNotContainsString('Worker batch failed', $log);
         $this->assertCleanOutput();
+    }
+
+    public function testSlowSendOutlastsWaitTimeoutAndRecordsSentWithoutResending(): void
+    {
+        [$app] = $this->application();
+        self::assertSame(202, $this->request($app, key: 'slow-process-1')->getStatusCode());
+        $this->startWorker(['DB_SESSION_WAIT_TIMEOUT' => '2'], delayFirstSend: 4);
+        $this->waitForSent(1, 15.0, 'after a send outlasted the database session');
+
+        self::assertSame(202, $this->request($app, key: 'slow-process-2')->getStatusCode());
+        $this->waitForSent(2, 10.0, 'in the next batch');
+
+        self::assertSame('2', self::scalar($this->pdo, "SELECT COUNT(*) FROM cd_email_queue WHERE status = 'sent' AND attempts = 1 AND sent_at IS NOT NULL"));
+        $log = $this->log();
+        self::assertStringContainsString('Email queue connection was closed by the server; reconnecting once', $log);
+        self::assertSame(2, substr_count($log, '"message":"Recording transport invoked"'));
+        self::assertSame(2, substr_count($log, '"message":"Email sent"'));
+        self::assertStringNotContainsString('Worker batch failed', $log);
+        self::assertCleanOutput();
     }
 
     private function assertCleanOutput(): void
@@ -71,12 +90,12 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
     }
 
     /** @param array<string, string> $environment */
-    private function startWorker(array $environment = [], int $sleep = 1): void
+    private function startWorker(array $environment = [], int $sleep = 1, int $delayFirstSend = 0): void
     {
         $this->directory = sys_get_temp_dir() . '/cd-worker-process-' . bin2hex(random_bytes(6));
         self::assertTrue(mkdir($this->directory));
         $spec = $this->directory . '/spec.json';
-        file_put_contents($spec, json_encode(['env' => array_merge($_ENV, $environment), 'log' => $this->directory . '/worker.log', 'batch' => 10, 'sleep' => $sleep], JSON_THROW_ON_ERROR));
+        file_put_contents($spec, json_encode(['env' => array_merge($_ENV, $environment), 'log' => $this->directory . '/worker.log', 'batch' => 10, 'sleep' => $sleep, 'delay_first_send' => $delayFirstSend], JSON_THROW_ON_ERROR));
         $process = proc_open(
             [PHP_BINARY, '-d', 'error_reporting=-1', '-d', 'display_errors=stderr', '-d', 'log_errors=0', dirname(__DIR__) . '/Support/email-worker-process.php', $spec],
             [0 => ['pipe', 'r'], 1 => ['file', $this->directory . '/stdout', 'w'], 2 => ['file', $this->directory . '/stderr', 'w']],

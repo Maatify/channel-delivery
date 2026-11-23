@@ -16,14 +16,17 @@ populated process environment. Keep secrets out of source and the web document r
 | DB_HOST / DB_PORT / DB_DATABASE |MySQL DSN, defaults127.0.0.1 /3306 /channel_delivery |
 | DB_USERNAME / DB_PASSWORD |Required database credentials |
 | DB_SESSION_WAIT_TIMEOUT |Session `wait_timeout` seconds applied on every new shared/worker connection (driver init command); empty uses 28800, MySQL's compiled default; integer 1..31536000, anything else fails the connection setup |
+| EMAIL_PROCESSING_LEASE_SECONDS | Worker lease duration, integer 1..31536000. Empty uses 300. Choose a duration above the longest single render plus SMTP send. Invalid values fail worker initialization. |
 | CRYPTO_ACTIVE_KEY_ID / CRYPTO_KEYS |Required JSON registry; each key material string must contain exactly32 raw bytes; no automatic hex/base64 decoding |
 
 The shared `PDO` (one per HTTP request or CLI command) and the worker's connection
 come from one factory, so both get the session settings. The factory never reconnects
 by itself, and the shared connection is never swapped: replacing a connection inside
 an open transaction would silently split that transaction across two sessions. Only
-the worker replaces its own connection, between batches. Set the timeout well above
-the worker's longest idle gap (its `--sleep` interval and the slowest single SMTP send).
+the email engine replaces its dedicated worker connection before claiming or
+around safe autocommit statements. Each worker session explicitly enables autocommit.
+Set the timeout above the longest expected idle
+gap to limit reconnects.
 
 Keep historical read keys for retained receipts and queued jobs. Cryptographic
 contexts and binding identity must not change across retries. v2/synthetic operations

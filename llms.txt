@@ -10,9 +10,10 @@
 - [Synthetic](docs/api/email-synthetic.md): inert recording, retention and consumer timing boundary.
 - [Examples](examples/README.md): runnable trusted-client examples and shared decoy payload.
 - [Configuration](docs/reference/configuration.md): actual environment reads and operator CLI.
-- [Upgrade](docs/upgrade/2.0.0.md): PHP compatibility break and explicit schema adoption.
+- [Upgrade](docs/upgrade/2.1.0.md): processing lease, schema checks and worker rollout.
 
 ## Release and community
+- [2.1.0 target](docs/releases/2.1.0.md): candidate changes and qualification.
 - [Published 2.0.0](docs/releases/2.0.0.md): published-source evidence, compatibility and curated notes.
 - [Qualification checklist](docs/releases/RELEASE_CHECKLIST.md): exact-SHA gates and archive verification before publication.
 - [Security](SECURITY.md): support and private reporting.

@@ -202,7 +202,7 @@ final class SyntheticEmailHttpMysqlTest extends AtomicHttpMysqlTestCase
     public function testExistingRateQuotaIsSharedWithRealEmail(): void
     {
         $redis = new \Redis();
-        self::assertTrue($redis->connect((string) getenv('CHANNEL_IT_REDIS_HOST'), 6379, 1));
+        self::assertTrue($redis->connect((string) getenv('CHANNEL_IT_REDIS_HOST'), self::redisPort(), 1));
         self::assertTrue($redis->ping());
         $_ENV['RATE_LIMIT_MAX_REQUESTS'] = '0';
         [$app] = $this->application();

@@ -21,19 +21,10 @@ use PDO;
 use Psr\Log\LoggerInterface;
 
 /**
- * Drives the email worker and owns its database connection.
+ * Runs email batches and lets the process manager restart a persistently disconnected worker.
  *
- * Before every batch the runner checks that its connection still answers. A lost
- * connection is replaced, together with the worker built on it, from the factory.
- * Replacement only happens between batches, never inside a transaction, and only
- * on the worker's own connection: the HTTP path never uses this logic.
- *
- * An iteration that cannot connect, or whose batch fails and leaves the connection
- * unusable (or still inside a transaction), is a connection failure. After the
- * configured number of consecutive connection failures the run returns a non-zero
- * exit code so the process manager restarts the worker. A successful batch, or a
- * batch error the server itself answered, resets that count. Other batch errors are
- * logged and the loop continues, as before.
+ * The email engine owns reconnects. The runner tracks its last session so it can
+ * distinguish an escaped connection failure from a batch error on a live session.
  */
 final class EmailWorkerRunner
 {
@@ -47,7 +38,7 @@ final class EmailWorkerRunner
     /** @var Closure(): PDO */
     private readonly Closure $connect;
 
-    /** @var Closure(PDO): EmailQueueWorker */
+    /** @var Closure(Closure(): PDO): EmailQueueWorker */
     private readonly Closure $buildWorker;
 
     /** @var Closure(int): void */
@@ -55,7 +46,7 @@ final class EmailWorkerRunner
 
     /**
      * @param Closure(): PDO                  $connect     Opens a fresh connection with the service's session settings.
-     * @param Closure(PDO): EmailQueueWorker  $buildWorker Builds a worker bound to the given connection.
+     * @param Closure(Closure(): PDO): EmailQueueWorker  $buildWorker Builds a worker that opens its own connections through the callback.
      * @param (Closure(int): void)|null       $sleep       Pause between loop iterations; defaults to sleep().
      */
     public function __construct(
@@ -100,75 +91,62 @@ final class EmailWorkerRunner
 
         $pdo = null;
         $worker = null;
-        $connectedBefore = false;
+        $attemptedConnection = false;
         $connectionFailures = 0;
         $batchFailures = 0;
         $lastSuccess = null;
 
+        $connect = function () use (&$pdo, &$attemptedConnection, &$connectionFailures): PDO {
+            // A failed replacement must not leave the previous session visible to the runner.
+            $pdo = null;
+            $openingReplacement = $attemptedConnection;
+            $attemptedConnection = true;
+            $pdo = ($this->connect)();
+            if ($openingReplacement) {
+                $this->logger->info('Worker database connection re-established', [
+                    'consecutive_connection_failures' => $connectionFailures,
+                ]);
+            }
+
+            return $pdo;
+        };
+
         do {
-            // ── A live connection before every batch ──────────────
-            if ($pdo !== null && !$this->answers($pdo)) {
-                $this->logger->warning('Worker database connection lost; reconnecting');
-                $pdo = null;
-                $worker = null;
-            }
-
-            if ($pdo === null || $worker === null) {
-                try {
-                    $pdo = ($this->connect)();
-                    $worker = ($this->buildWorker)($pdo);
-                } catch (\Throwable $failure) {
-                    $pdo = null;
-                    $worker = null;
-                    ++$connectionFailures;
-                    ++$batchFailures;
-                    $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess));
-                    if ($connectionFailures >= $limit) {
-                        return $this->exitForRestart($connectionFailures, $limit, $failure);
-                    }
-                    $this->logger->warning('Worker database connection failed', [
-                        'consecutive_connection_failures' => $connectionFailures,
-                        'max_connection_failures'         => $limit,
-                        'message'                         => $failure->getMessage(),
-                    ]);
-                    $this->pause($loop, $sleepSeconds);
-                    continue;
-                }
-                if ($connectedBefore || $connectionFailures > 0) {
-                    $this->logger->info('Worker database connection re-established', [
-                        'consecutive_connection_failures' => $connectionFailures,
-                    ]);
-                }
-                $connectedBefore = true;
-            }
-
-            // ── The batch ─────────────────────────────────────────
             try {
+                $worker ??= ($this->buildWorker)($connect);
                 $worker->processBatch($batchSize);
                 $connectionFailures = 0;
                 $batchFailures = 0;
                 $lastSuccess = time();
                 $this->logger->info('Batch processed', ['limit' => $batchSize]);
-            } catch (\Throwable $e) {
+            } catch (\Throwable $failure) {
                 ++$batchFailures;
-                $this->logger->error('Worker batch failed', [
-                    'message' => $e->getMessage(),
-                    'trace'   => $e->getTraceAsString(),
-                ]);
+                $failedToConnect = $pdo === null;
+                if (!$failedToConnect) {
+                    $this->logger->error('Worker batch failed', [
+                        'message' => $failure->getMessage(),
+                        'trace'   => $failure->getTraceAsString(),
+                    ]);
+                }
 
-                if ($pdo->inTransaction() || !$this->answers($pdo)) {
-                    // Never reuse it: the next iteration opens a fresh connection, so
-                    // no open transaction is ever carried into the next batch.
+                if ($pdo === null || $pdo->inTransaction() || !$this->answers($pdo)) {
+                    // After an escaped failure, discard the engine and its unusable session.
                     $pdo = null;
                     $worker = null;
                     ++$connectionFailures;
                     if ($connectionFailures >= $limit) {
                         $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess));
 
-                        return $this->exitForRestart($connectionFailures, $limit, $e);
+                        return $this->exitForRestart($connectionFailures, $limit, $failure);
+                    }
+                    if ($failedToConnect) {
+                        $this->logger->warning('Worker database connection failed', [
+                            'consecutive_connection_failures' => $connectionFailures,
+                            'max_connection_failures'         => $limit,
+                            'message'                         => $failure->getMessage(),
+                        ]);
                     }
                 } else {
-                    // The server answered: not a connection failure.
                     $connectionFailures = 0;
                 }
             }
@@ -183,7 +161,7 @@ final class EmailWorkerRunner
     }
 
     /**
-     * Liveness probe. A dead connection is the expected failure here, so the driver's
+     * Failure-path liveness probe. A dead connection is the expected failure here, so the driver's
      * connection-loss notices (for example "Packets out of order" when MySQL 8.0.24+
      * reports an expired wait_timeout) are not reported. Every other warning goes to
      * the previous handler, or to PHP's standard handling when there is none.

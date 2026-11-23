@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use Closure;
 use DI\Container;
 use Maatify\ChannelDelivery\Database\PdoConnectionFactory;
+use Maatify\ChannelDelivery\Worker\EmailQueueWorkerFactory;
 use Maatify\ChannelDelivery\Worker\EmailWorkerRunner;
 use Maatify\EmailDelivery\Worker\EmailQueueWorker;
 use PDO;
@@ -31,11 +32,13 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
     public function testEveryNewConnectionGetsTheConfiguredSessionSettings(): void
     {
         $factory = $this->factory(37);
-        $first = $factory->create();
-        $second = $factory->create();
+        $first = $factory->createForWorker();
+        $second = $factory->createForWorker();
 
         self::assertSame('37', self::scalar($first, 'SELECT @@SESSION.wait_timeout'));
         self::assertSame('37', self::scalar($second, 'SELECT @@SESSION.wait_timeout'));
+        self::assertSame('1', self::scalar($first, 'SELECT @@SESSION.autocommit'));
+        self::assertSame('1', self::scalar($second, 'SELECT @@SESSION.autocommit'));
         self::assertNotSame(self::scalar($first, 'SELECT CONNECTION_ID()'), self::scalar($second, 'SELECT CONNECTION_ID()'));
         self::assertSame((string) PdoConnectionFactory::DEFAULT_WAIT_TIMEOUT_SECONDS, self::scalar(PdoConnectionFactory::fromEnvironment($_ENV)->create(), 'SELECT @@SESSION.wait_timeout'));
 
@@ -126,7 +129,7 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
         self::assertSame(EmailWorkerRunner::EXIT_CONNECTION_UNAVAILABLE, $code);
         self::assertSame(4, $attempts, 'One real connection, then three failed attempts.');
         self::assertSame(1, $this->transport->calls);
-        self::assertSame(1, $this->logger->count('Worker database connection lost; reconnecting'));
+        self::assertSame(1, $this->logger->count('Email queue connection was closed by the server; reconnecting before the claim'));
         self::assertSame(2, $this->logger->count('Worker database connection failed'));
         self::assertSame(['Worker exiting for restart: database connection unavailable'], $this->logger->messages('critical'));
         self::assertSame(0, $this->logger->count('Worker database connection re-established'));
@@ -162,8 +165,48 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
         self::assertCount(1, $this->sessions, 'A server-answered error never replaces the connection.');
         self::assertSame(4, $this->logger->count('Worker batch failed'), 'More failures than the restart limit, and no exit.');
         self::assertSame([], $this->logger->messages('critical'));
-        self::assertSame(0, $this->logger->count('Worker database connection lost; reconnecting'));
+        self::assertSame(0, $this->logger->count('Email queue connection was closed by the server; reconnecting before the claim'));
         self::assertSame(1, $this->transport->calls, 'The loop recovers on the same connection once the table is back.');
+    }
+
+    public function testServiceSchemaReclaimsExpiredLeasesAndSettlesTheAttemptCap(): void
+    {
+        [$app, $container] = $this->application();
+        self::assertSame('timestamp', self::scalar($this->pdo, "
+            SELECT DATA_TYPE FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cd_email_queue' AND COLUMN_NAME = 'updated_at'
+        "));
+        self::assertSame('status,priority,id', self::scalar($this->pdo, "
+            SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX)
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'cd_email_queue' AND INDEX_NAME = 'idx_worker_poll_priority'
+        "));
+
+        $this->accept($app, 'expired-keyed');
+        self::assertSame(202, $this->request($app, path: '/api/v1/email/enqueue')->getStatusCode());
+        $this->accept($app, 'fresh-keyed');
+        $this->accept($app, 'expired-at-cap');
+        // The old worker updated this service's TIMESTAMP implicitly on each claim.
+        $this->pdo->exec("UPDATE cd_email_queue SET status='processing', attempts=1");
+        $this->pdo->exec("UPDATE cd_email_queue SET updated_at=NOW() - INTERVAL 120 SECOND WHERE id=2 AND enqueue_receipt_id IS NULL");
+        $this->pdo->exec("UPDATE cd_email_queue SET updated_at=NOW() - INTERVAL 120 SECOND WHERE id=1");
+        $this->pdo->exec("UPDATE cd_email_queue SET attempts=4, updated_at=NOW() - INTERVAL 120 SECOND WHERE id=4");
+
+        $_ENV['EMAIL_PROCESSING_LEASE_SECONDS'] = '90';
+        $factory = $this->factory();
+        $runner = new EmailWorkerRunner(static function () use ($factory): PDO {
+            $pdo = $factory->createForWorker();
+            $pdo->exec("SET SESSION time_zone = '-05:00'");
+            return $pdo;
+        }, $this->workers($container), $this->logger);
+
+        self::assertSame(EmailWorkerRunner::EXIT_OK, $runner->run(10, false, 0));
+        self::assertSame(2, $this->transport->calls);
+        self::assertSame('1:sent:2,2:sent:2,3:processing:1,4:failed:4', self::scalar(
+            $this->pdo,
+            "SELECT GROUP_CONCAT(CONCAT(id, ':', status, ':', attempts) ORDER BY id) FROM cd_email_queue"
+        ));
+        self::assertSame('processing_lease_expired', self::scalar($this->pdo, "SELECT last_error FROM cd_email_queue WHERE id=4"));
     }
 
     private function factory(int $waitTimeout = PdoConnectionFactory::DEFAULT_WAIT_TIMEOUT_SECONDS): PdoConnectionFactory
@@ -188,21 +231,20 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
 
     private function track(PdoConnectionFactory $factory): PDO
     {
-        $pdo = $factory->create();
+        $pdo = $factory->createForWorker();
         $this->sessions[] = ['id' => self::scalar($pdo, 'SELECT CONNECTION_ID()'), 'wait_timeout' => self::scalar($pdo, 'SELECT @@SESSION.wait_timeout')];
 
         return $pdo;
     }
 
-    /** @return Closure(PDO): EmailQueueWorker */
+    /** @return Closure(Closure(): PDO): EmailQueueWorker */
     private function workers(Container $container): Closure
     {
-        return static function (PDO $pdo) use ($container): EmailQueueWorker {
-            $worker = $container->make(EmailQueueWorker::class, ['pdo' => $pdo]);
-            self::assertInstanceOf(EmailQueueWorker::class, $worker);
+        $container->set(\Psr\Log\LoggerInterface::class, $this->logger);
+        $factory = $container->get(EmailQueueWorkerFactory::class);
+        self::assertInstanceOf(EmailQueueWorkerFactory::class, $factory);
 
-            return $worker;
-        };
+        return $factory->create(...);
     }
 
     private function runUntilStopped(EmailWorkerRunner $runner): void
@@ -225,7 +267,7 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
     {
         self::assertCount(2, $this->sessions);
         self::assertNotSame($this->sessions[0]['id'], $this->sessions[1]['id']);
-        self::assertSame(1, $this->logger->count('Worker database connection lost; reconnecting'));
+        self::assertSame(1, $this->logger->count('Email queue connection was closed by the server; reconnecting before the claim'));
         self::assertSame(1, $this->logger->count('Worker database connection re-established'));
         self::assertSame(0, $this->logger->count('Worker batch failed'));
         self::assertSame([], $this->logger->messages('critical'));

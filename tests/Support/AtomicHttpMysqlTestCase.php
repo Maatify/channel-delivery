@@ -48,7 +48,7 @@ abstract class AtomicHttpMysqlTestCase extends TestCase
             'DB_HOST' => $host[1], 'DB_PORT' => $port[1] ?? '3306', 'DB_DATABASE' => $database,
             'DB_USERNAME' => (string) getenv('CHANNEL_IT_USER'), 'DB_PASSWORD' => (string) getenv('CHANNEL_IT_PASS'),
             'CRYPTO_ACTIVE_KEY_ID' => 'fixture-v1', 'CRYPTO_KEYS' => json_encode([['id' => 'fixture-v1', 'key' => str_repeat('k', 32)]], JSON_THROW_ON_ERROR),
-            'REDIS_HOST' => (string) getenv('CHANNEL_IT_REDIS_HOST'), 'REDIS_PORT' => '6379', 'REDIS_TIMEOUT' => '0.2', 'REDIS_PASSWORD' => '', 'REDIS_DB' => '0',
+            'REDIS_HOST' => (string) getenv('CHANNEL_IT_REDIS_HOST'), 'REDIS_PORT' => (string) self::redisPort(), 'REDIS_TIMEOUT' => '0.2', 'REDIS_PASSWORD' => '', 'REDIS_DB' => '0',
             'SYNTHETIC_EMAIL_RETENTION_SECONDS' => '3600', 'RATE_LIMIT_MAX_REQUESTS' => '10000', 'RATE_LIMIT_WINDOW_SECONDS' => '60', 'TRUSTED_PROXIES' => '',
         ]);
         $apiKeys = new ApiKeyRepository($this->pdo);
@@ -71,6 +71,13 @@ abstract class AtomicHttpMysqlTestCase extends TestCase
         }
         $pdo->exec("SET SESSION time_zone='+00:00'");
         return $pdo;
+    }
+
+    protected static function redisPort(): int
+    {
+        $port = getenv('CHANNEL_IT_REDIS_PORT');
+
+        return $port === false ? 6379 : (int) $port;
     }
 
     private function resetSchema(): void

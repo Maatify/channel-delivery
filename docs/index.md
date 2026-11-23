@@ -16,11 +16,11 @@ Email is implemented; Telegram, SMS and Push remain planned.
 - [Worker](how-to/run-worker.md): connection recovery, exit codes and queue-stall monitoring.
 - [Atomic schema/binding rollout and recovery](how-to/atomic-email-rollout.md).
 - [Synthetic schema, retention and bounded maintenance](how-to/synthetic-email-operations.md).
-- [Upgrade to project 2.0.0](upgrade/2.0.0.md).
+- [Upgrade to project 2.1.0](upgrade/2.1.0.md) and [historical 2.0.0 upgrade](upgrade/2.0.0.md).
 
 ## Release and community
 
-- [Published 2.0.0](releases/2.0.0.md), [qualification/publication checklist](releases/RELEASE_CHECKLIST.md), [changelog](../CHANGELOG.md).
+- [2.1.0 target](releases/2.1.0.md), [published 2.0.0](releases/2.0.0.md), [qualification/publication checklist](releases/RELEASE_CHECKLIST.md), [changelog](../CHANGELOG.md).
 - [Security policy](../SECURITY.md), [security mechanisms and limits](../SECURITY_AUDIT.md).
 - [Contributing](../CONTRIBUTING.md), [code of conduct](../CODE_OF_CONDUCT.md), [MIT license](../LICENSE).
 - [Service ADRs](adr/001-atomic-email-http.md) document design; [synthetic ADR](adr/002-synthetic-email-http.md) adds the no-send path.

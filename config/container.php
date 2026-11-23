@@ -21,7 +21,7 @@ if (($_ENV['APP_ENV'] ?? 'production') === 'production') {
 // PDO::class is the single shared connection of an HTTP request or CLI command.
 // It is never swapped for a new one: replacing it inside an open transaction
 // would silently split that transaction. Only the email worker replaces its own
-// connection, and only between batches (see EmailWorkerRunner).
+// connection, outside transactions (see EmailWorkerRunner).
 $builder->addDefinitions([
     PdoConnectionFactory::class => factory(function (): PdoConnectionFactory {
         return PdoConnectionFactory::fromEnvironment($_ENV);

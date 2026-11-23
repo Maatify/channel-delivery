@@ -22,6 +22,7 @@ use Maatify\EmailDelivery\Renderer\TwigEmailRenderer;
 use Maatify\EmailDelivery\Transport\EmailTransportInterface;
 use Maatify\EmailDelivery\Transport\SmtpEmailTransport;
 use Maatify\EmailDelivery\Worker\EmailQueueWorker;
+use Maatify\ChannelDelivery\Worker\EmailQueueWorkerFactory;
 use Maatify\ChannelDelivery\Worker\EmailWorkerRunner;
 use Psr\Log\LoggerInterface;
 
@@ -94,25 +95,34 @@ return [
     SyntheticEmailMaintenanceInterface::class => get(SyntheticEmailGateway::class),
 
     // ── Worker ────────────────────────────────────────────────
-    // LoggerInterface is resolved from the container (defined in crypto.php).
-    // EmailQueueWorker now requires a logger for structured failure reporting.
-    EmailQueueWorker::class          => autowire(EmailQueueWorker::class),
-
-    // The long-running worker owns its connection: it opens it from the factory and
-    // rebuilds connection + worker after a lost connection, between batches only.
-    EmailWorkerRunner::class => factory(function (
-        PdoConnectionFactory $connections,
+    EmailQueueWorkerFactory::class => factory(function (
         CryptoProvider $crypto,
         EmailRendererInterface $renderer,
         EmailTransportInterface $transport,
         CryptoContextProviderInterface $contexts,
         LoggerInterface $logger,
-    ): EmailWorkerRunner {
-        return new EmailWorkerRunner(
-            $connections->create(...),
-            static fn (PDO $pdo): EmailQueueWorker => new EmailQueueWorker($pdo, $crypto, $renderer, $transport, $contexts, $logger),
+    ): EmailQueueWorkerFactory {
+        return new EmailQueueWorkerFactory(
+            $crypto,
+            $renderer,
+            $transport,
+            $contexts,
             $logger,
+            EmailQueueWorkerFactory::leaseSeconds($_ENV['EMAIL_PROCESSING_LEASE_SECONDS'] ?? null),
         );
+    }),
+    EmailQueueWorker::class => factory(function (
+        PdoConnectionFactory $connections,
+        EmailQueueWorkerFactory $workers,
+    ): EmailQueueWorker {
+        return $workers->create($connections->createForWorker(...));
+    }),
+    EmailWorkerRunner::class => factory(function (
+        PdoConnectionFactory $connections,
+        EmailQueueWorkerFactory $workers,
+        LoggerInterface $logger,
+    ): EmailWorkerRunner {
+        return new EmailWorkerRunner($connections->createForWorker(...), $workers->create(...), $logger);
     }),
 
 ];

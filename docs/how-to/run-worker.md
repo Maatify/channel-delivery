@@ -28,46 +28,43 @@ Exit codes: `0` finished, `1` database connection unavailable, `2` bad arguments
 
 ## Database connection and recovery
 
-The worker owns its database connection. It opens it from the same factory as the
-rest of the service, which applies `DB_SESSION_WAIT_TIMEOUT` on every new connection,
-so the worker does not depend on the server's global `wait_timeout`.
+The worker opens a dedicated session through the service factory. Each replacement
+applies `DB_SESSION_WAIT_TIMEOUT` and enables autocommit so status writes commit independently. The email engine
+checks connectivity before claiming and reconnects once around safe status
+statements after a connection loss. A retry after SMTP repeats the database
+write. A claim transaction is attempted once per batch.
 
-- **Before every batch** the worker checks that its connection still answers. If
-  the server closed it (restart, idle timeout, network), the worker opens a new
-  connection, rebuilds itself on it and runs the batch.
-- **A connection failure** is an iteration that cannot connect, or whose batch fails
-  and afterwards leaves the connection unusable or still inside a transaction. Such a
-  connection is never reused; the next iteration opens a fresh one.
-- **After `--max-connection-failures` consecutive connection failures** the loop exits
-  with code `1`, so the process manager restarts it. A successful batch, or a batch
-  error the server itself answered, resets the count. A single run (no `--loop`)
-  exits `1` on its first connection failure.
-- **Other batch errors** (the server answered with an SQL error) keep the loop going
-  on the same connection, as before.
+| Event | Log record | Level |
+| --- | --- | --- |
+| Connection closed before the claim | `Email queue connection was closed by the server; reconnecting before the claim` | warning |
+| Connection closed during a safe status statement | `Email queue connection was closed by the server; reconnecting once` | warning |
+| Replacement connection opens | `Worker database connection re-established` | info |
+| Connection opening fails below the restart limit | `Worker database connection failed` | warning |
+| Batch raises an error after opening its connection | `Worker batch failed` | error |
+| Consecutive connection failures reach the limit | `Worker exiting for restart: database connection unavailable` | critical |
+| Batch returns successfully | `Batch processed` | info |
 
-| Event | Log record | Level | Connection failure count |
-| --- | --- | --- | --- |
-| The pre-batch check finds the connection closed | `Worker database connection lost; reconnecting` | warning | unchanged; a reconnect follows in the same iteration |
-| A connect attempt fails, below the limit | `Worker database connection failed` (with the count, the limit and the driver message) | warning | +1 |
-| A connect succeeds after a lost connection or failed attempts | `Worker database connection re-established` | info | unchanged |
-| A batch fails, for any reason | `Worker batch failed` | error | +1 if the connection no longer answers or is still inside a transaction; otherwise reset to 0 |
-| The count reaches the limit, from a failed connect or a failed batch | `Worker exiting for restart: database connection unavailable` | critical | the run exits `1` |
-| A batch succeeds | `Batch processed` | info | reset to 0 |
+The loop returns `1` after `--max-connection-failures` consecutive failed
+iterations caused by an unavailable connection or a session still in a transaction.
+A one-shot run returns `1` on the first such failure. A successful batch or a
+batch error on a usable session resets the connection-failure count. The latter
+still increments the batch-failure counter for the stall monitor. The HTTP path
+keeps its request-scoped connections.
 
-The last failed connect attempt logs only the critical record, not the warning. A
-failed batch that reaches the limit logs `Worker batch failed` first, then the
-critical record.
+## Processing lease
 
-The connection is replaced only between batches, never inside a transaction, and
-only the worker's own connection. HTTP requests keep one shared connection per
-request and never reconnect: replacing it inside an open transaction would silently
-split that transaction across two sessions.
+Each claim stamps `updated_at` and renews the lease immediately before rendering and
+sending each row. Set `EMAIL_PROCESSING_LEASE_SECONDS` above the longest expected
+single render and SMTP send. Empty configuration selects the default of 300 seconds.
+The existing TIMESTAMP stores an instant, so lease age is independent of fixed
+offsets or daylight saving time in database sessions.
 
-A connection that drops in the middle of a batch (for example during a long SMTP
-send) still fails that batch, and the rows it claimed stay `processing` until
-`scripts/recover_stuck_jobs.php` resets them. Run that script on a schedule.
-Known limitation: it compares receipt-bound rows' UTC `updated_at` with the session
-clock and fences its reset only on status; see [channel-delivery#14](https://github.com/Maatify/channel-delivery/issues/14).
+If the send succeeds but the status cannot be saved, the engine logs
+`Email sent but status write failed`. A later batch can reclaim the row after its
+lease expires, with possible redelivery. After four attempts, an expired row
+becomes `failed` with `processing_lease_expired` and no additional send.
+Delivery is at-least-once. During an upgrade, disable any old scheduled reset
+before starting workers that use leases. [Upgrade procedure](../upgrade/2.1.0.md)
 
 ## Supervisor Configuration
 

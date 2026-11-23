@@ -3,7 +3,7 @@
 The source change does not deploy anything, execute production SQL or alter mail
 policy. Enable the optional endpoint only after the following operator steps:
 
-1. Install the committed dependency lock (email-delivery1.2.0) on PHP8.4+.
+1. Install the committed dependency lock (email-delivery 1.3.0) on PHP8.4+.
 2. Keep the existing real/service schemas and consumer bindings. Apply the optional
    **installed package** file
    `vendor/maatify/email-delivery/schema/mysql/004_email_synthetic_requests.sql`.

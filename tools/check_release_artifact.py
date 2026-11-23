@@ -17,7 +17,8 @@ REQUIRED = {
     "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
     "composer.json", "composer.lock", ".env.example", ".gitignore", "llms.txt", "public/index.php",
     "src/Application/Application.php", "scripts/email_worker.php", "scripts/create_api_key.php",
-    "scripts/purge_synthetic_email.php", "docs/index.md", "docs/guides/USAGE_GUIDE.md",
+    "scripts/purge_synthetic_email.php", "scripts/email_queue_status.php",
+    "migrations/003_optimize_worker_poll_index.sql", "docs/how-to/run-worker.md", "docs/index.md", "docs/guides/USAGE_GUIDE.md",
     "docs/CHANNEL_DELIVERY_API.md", "docs/api/email-atomic.md", "docs/api/email-synthetic.md",
     "docs/reference/configuration.md", "docs/releases/RELEASE_CHECKLIST.md", "examples/README.md",
     "examples/enqueue-v1.sh", "examples/enqueue-v2.sh", "examples/receipt-v2.sh", "examples/synthetic.sh",
@@ -59,18 +60,18 @@ def check(archive, target, source=None, commit=None, package="maatify/channel-de
     if not missing.issubset(files):
         raise ValueError("Missing required consumer files: " + ", ".join(sorted(missing - files.keys())))
     for name in files:
-        if name in (".env", ".git") or name.startswith(FORBIDDEN) or name.startswith(".env.") and name != ".env.example":
+        if name in (".env", ".git", "scripts/recover_stuck_jobs.php") or name.startswith(FORBIDDEN) or name.startswith(".env.") and name != ".env.example":
             raise ValueError("Forbidden deployment archive entry: " + name)
     manifest = json.loads(files["composer.json"])
     lock = json.loads(files["composer.lock"])
     if manifest.get("name") != package or manifest.get("type") != "project" or manifest.get("license") != "MIT":
         raise ValueError("Composer identity/type/license mismatch")
-    if manifest["require"].get("php") != "^8.4" or "ext-pdo_mysql" not in manifest["require"] or manifest["require"].get("maatify/email-delivery") != "^1.2":
+    if manifest["require"].get("php") != "^8.4" or "ext-pdo_mysql" not in manifest["require"] or manifest["require"].get("maatify/email-delivery") != "^1.3":
         raise ValueError("Runtime prerequisites mismatch")
     if "MIT License" not in files["LICENSE"].decode():
         raise ValueError("Repository license mismatch")
     packages = {p["name"]: p["version"] for p in lock["packages"]}
-    if packages.get("maatify/email-delivery") not in ("1.2.0", "v1.2.0"):
+    if packages.get("maatify/email-delivery") not in ("1.3.0", "v1.3.0"):
         raise ValueError("Unexpected email engine in qualified project lock")
     readme = files["README.md"].decode()
     identity = f"Artifact target: `{target}`" if upstream else f"Artifact identity: `{package}`"

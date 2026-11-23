@@ -2,6 +2,14 @@
 
 Status: accepted by owner on 2026-11-22 under channel-delivery#12, implemented in #13.
 
+In 2.1.0, [#15](https://github.com/Maatify/channel-delivery/issues/15) delegates
+pre-claim and safe in-batch reconnects to email-delivery 1.3.0. The service runner
+retains the exit-for-restart policy and probes its tracked connection only after an
+escaped batch failure. The engine now owns stale-job recovery through the existing
+TIMESTAMP lease. See the [current worker guide](../how-to/run-worker.md) and
+[upgrade procedure](../upgrade/2.1.0.md). The decision below describes the original
+between-batch implementation.
+
 ## Context
 
 The long-running worker caught every batch error and looped forever on one PDO
@@ -44,5 +52,3 @@ the server's global `wait_timeout`.
 The worker recovers from a dropped connection on its next batch, and repeated
 failures surface as process restarts. Operators gain one environment key, two worker
 options, documented exit codes and a monitoring command with suggested thresholds.
-Rows claimed by a batch whose connection drops mid-send still wait for the existing
-stuck-job recovery script until the library's lease is available.

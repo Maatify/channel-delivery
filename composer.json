@@ -37,7 +37,7 @@
     "ext-sodium": "*",
     "ext-zlib": "*",
     "maatify/crypto": "^1.0",
-    "maatify/email-delivery": "^1.2",
+    "maatify/email-delivery": "^1.3",
     "maatify/psr-logger": "^1.0",
     "maatify/shared-common": "^1.0",
     "php-di/php-di": "^7.1",

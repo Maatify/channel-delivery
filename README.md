@@ -20,18 +20,12 @@ Standalone asynchronous email delivery service with encrypted queues, atomic acc
 
 ---
 
-**Artifact target: `2.0.0`** — project release identity; HTTP API versioning is separate.
+**Artifact target: `2.1.0`** — project release identity; HTTP API versioning is separate.
 
-**Current publication (2026-11-07):** [2.0.0 is published](https://github.com/Maatify/channel-delivery/releases/tag/v2.0.0)
-and available through Composer. Its immutable source is commit
-[`c5714f8d1b3fc13e4d42e88501c668af3f1595ac`](https://github.com/Maatify/channel-delivery/commit/c5714f8d1b3fc13e4d42e88501c668af3f1595ac).
-Exact-version Composer installation and all 88 distributed source files were verified.
-Security support covers both 1.x and 2.x; see [SECURITY.md](SECURITY.md).
-
-**Publication snapshot at preparation (2026-11-07):** `2.0.0` was unpublished;
-`1.1.0` was the verified published release. The badges above report live repository/registry state,
-not the identity or qualification of this artifact. See the [2.0.0 release guide](docs/releases/2.0.0.md)
-and [upgrade guide](docs/upgrade/2.0.0.md). This historical preparation snapshot does not describe current availability; the publication record above does.
+**Publication snapshot at preparation (2026-11-23):** `2.1.0` is unpublished.
+The published baseline is [2.0.0](docs/releases/2.0.0.md). See the
+[2.1.0 release guide](docs/releases/2.1.0.md) and [upgrade guide](docs/upgrade/2.1.0.md).
+Security support covers both 1.x and 2.x. [Security policy](SECURITY.md)
 
 ## Overview
 
@@ -51,7 +45,7 @@ Additional channels such as **SMS, Telegram, and Push notifications** are planne
 ---
 
 Atomic keyed acceptance and receipt lookup are available through the additive
-[v2 HTTP API](docs/api/email-atomic.md), using email-delivery 1.2.0.
+[v2 HTTP API](docs/api/email-atomic.md), using email-delivery 1.3.0.
 Follow the [schema/binding rollout](docs/how-to/atomic-email-rollout.md) before enabling v2.
 v1 keeps its existing behavior.
 
@@ -145,8 +139,8 @@ Detailed processing steps:
 
 ## Requirements
 
-- PHP **8.4+** for this 2.0.0 artifact (CI: 8.4 and 8.5); see [upgrade compatibility](docs/upgrade/2.0.0.md)
-- MySQL with InnoDB and the PDO MySQL driver; service CI currently exercises MySQL 9.2. MariaDB deployment compatibility needs its own qualification.
+- PHP **8.4+** (CI matrix includes 8.4 and 8.5). [Upgrade compatibility](docs/upgrade/2.1.0.md)
+- InnoDB and PDO MySQL. The CI matrix includes MySQL 9.2 and MariaDB 11.4.
 - Redis
 - SMTP server
 - Composer
@@ -184,6 +178,12 @@ Install the published 2.0.0 project with:
 ```bash
 composer create-project --prefer-dist --no-dev maatify/channel-delivery channel-delivery 2.0.0
 cd channel-delivery
+```
+
+Once 2.1.0 is published, select it explicitly with:
+
+```bash
+composer create-project --prefer-dist --no-dev maatify/channel-delivery channel-delivery 2.1.0
 ```
 
 For source review or contribution, use a reviewed checkout:
@@ -399,7 +399,7 @@ See the worker setup guide:
 
 * [Documentation Index](docs/index.md)
 * [Usage Guide](docs/guides/USAGE_GUIDE.md)
-* [2.0.0 Upgrade Guide](docs/upgrade/2.0.0.md)
+* [2.1.0 Upgrade Guide](docs/upgrade/2.1.0.md)
 * [Configuration / CLI Reference](docs/reference/configuration.md)
 * [Atomic v2 Contract](docs/api/email-atomic.md)
 * [Synthetic Contract](docs/api/email-synthetic.md)

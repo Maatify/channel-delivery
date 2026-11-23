@@ -1,7 +1,7 @@
 # Synthetic email recording HTTP API
 
 `POST /api/v2/email/synthetic` is a **trusted service-to-service**, explicit no-send
-endpoint using email-delivery1.2.0. It receives and records encrypted decoy message
+endpoint using email-delivery 1.3.0. It receives and records encrypted decoy message
 data in package-owned `cd_email_synthetic_requests`; the email worker never reads
 that table. It has no real queue writer or maintenance port injected.
 

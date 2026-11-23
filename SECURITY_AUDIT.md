@@ -1,6 +1,6 @@
 # Security mechanisms and verification boundaries
 
-This file describes current mechanisms in the2.0.0 source. It is **not an independent
+This file describes current mechanisms in the current service source. It is **not an independent
 security audit or certification**. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 - Recipient and payload data (including context/Reply-To) are encrypted by
@@ -16,6 +16,9 @@ security audit or certification**. Report vulnerabilities through [SECURITY.md](
 - Synthetic recording uses isolated optional storage with separate crypto domains,
   no worker schedule and no transfer to real queue. Retention is explicit; cleanup
   is trusted/global/bounded and must be operated. Expiry alone does not delete rows.
+- The email worker reconnects outside transactions and reclaims expired processing
+  leases using attempt ownership. The operator controls worker rollout and
+  review of jobs with ambiguous SMTP outcomes.
 - APP_DEBUG=false hides response exception details. SMTP diagnostic output is
   controlled by MAIL_DEBUG_LEVEL; logs still need operator access/redaction/retention.
 - Local integration and CI evidence is described in [contributing](CONTRIBUTING.md)
