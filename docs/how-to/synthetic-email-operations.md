@@ -14,8 +14,8 @@ policy. Enable the optional endpoint only after the following operator steps:
    1..2147483647. No business default is selected. Empty/invalid configuration
    makes only synthetic recording/maintenance unavailable. Production value is
    an operator/owner decision; tests use3600 seconds solely as a fixture.
-4. Clear stale compiled DI definitions during deployment; in Athar use the existing
-   `php scripts/deploy_clear_cache.php` procedure, preserving its templates/cache.
+4. Refresh the release's compiled caches before restarting affected processes.
+   Follow the [cache procedure](../reference/configuration.md#compiled-caches).
 5. Schedule trusted cleanup externally and monitor expiry backlog/storage growth.
    No cron is installed by this source change. Example bounded invocation:
 

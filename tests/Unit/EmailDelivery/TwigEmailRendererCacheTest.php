@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\EmailDelivery;
 
+use DI\ContainerBuilder;
 use Maatify\EmailDelivery\DTO\GenericEmailPayload;
 use Maatify\EmailDelivery\Renderer\TwigEmailRenderer;
 use PHPUnit\Framework\Attributes\Test;
@@ -150,6 +151,47 @@ final class TwigEmailRendererCacheTest extends TestCase
         $renderer->render('welcome', 'en', new GenericEmailPayload(['user_name' => 'Ahmed']));
 
         $this->assertDirectoryExists($this->cacheDir);
+    }
+
+    public function testServiceBindingUsesTheReleaseCacheAndLanguageSpecificGlobals(): void
+    {
+        $root = $this->templatesPath;
+        $definitionsFile = $root . '/config/dependencies/email_delivery.php';
+        self::assertTrue(mkdir(dirname($definitionsFile), 0700, true));
+        self::assertTrue(copy(dirname(__DIR__, 3) . '/config/dependencies/email_delivery.php', $definitionsFile));
+        self::assertTrue(mkdir($root . '/templates/emails/welcome', 0700, true));
+        self::assertNotFalse(file_put_contents(
+            $root . '/templates/emails/welcome/en.twig',
+            '{% block subject %}Welcome{% endblock %}{{ brand_name_ar }} | {{ brand_name_en }} | {{ support_email }}'
+        ));
+        self::assertTrue(mkdir($this->cacheDir, 0700));
+
+        $before = $_ENV;
+        $cwd = getcwd();
+        self::assertIsString($cwd);
+        try {
+            self::assertTrue(chdir($this->cacheDir));
+            $_ENV['APP_NAME'] = 'Fallback';
+            $_ENV['APP_BRAND_NAME_AR'] = 'Configured brand';
+            unset($_ENV['APP_BRAND_NAME_EN']);
+            $_ENV['SUPPORT_EMAIL'] = 'support@example.invalid';
+
+            /** @var array<string, mixed> $definitions */
+            $definitions = require $definitionsFile;
+            $builder = new ContainerBuilder();
+            $builder->addDefinitions($definitions);
+            $builder->enableCompilation($root . '/var/cache/di', 'CompiledRendererFixture');
+            $renderer = $builder->build()->get(TwigEmailRenderer::class);
+            self::assertInstanceOf(TwigEmailRenderer::class, $renderer);
+            $email = $renderer->render('welcome', 'en', new GenericEmailPayload([]));
+
+            self::assertStringContainsString('Configured brand | Fallback | support@example.invalid', $email->htmlBody);
+            self::assertNotEmpty(glob($root . '/var/cache/twig/*/*.php'));
+            self::assertDirectoryDoesNotExist($this->cacheDir . '/var/cache/twig');
+        } finally {
+            chdir($cwd);
+            $_ENV = $before;
+        }
     }
 
     // ── Globals still injected with caching enabled ───────────

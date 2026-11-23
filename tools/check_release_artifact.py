@@ -17,7 +17,7 @@ REQUIRED = {
     "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md",
     "composer.json", "composer.lock", ".env.example", ".gitignore", "llms.txt", "public/index.php",
     "src/Application/Application.php", "scripts/email_worker.php", "scripts/create_api_key.php",
-    "scripts/purge_synthetic_email.php", "scripts/email_queue_status.php",
+    "scripts/purge_synthetic_email.php", "scripts/email_queue_status.php", "scripts/deploy_clear_cache.php",
     "migrations/003_optimize_worker_poll_index.sql", "docs/how-to/run-worker.md", "docs/index.md", "docs/guides/USAGE_GUIDE.md",
     "docs/CHANNEL_DELIVERY_API.md", "docs/api/email-atomic.md", "docs/api/email-synthetic.md",
     "docs/reference/configuration.md", "docs/releases/RELEASE_CHECKLIST.md", "examples/README.md",
@@ -56,7 +56,7 @@ def check(archive, target, source=None, commit=None, package="maatify/channel-de
     guide = target if upstream else "README"
     missing = REQUIRED | {f"docs/releases/{guide}.md", f"docs/upgrade/{guide}.md"}
     if not upstream:
-        missing |= {"scripts/deploy_clear_cache.php", "templates/emails/order_confirmation/ar.twig", "templates/emails/order_delivered/en.twig"}
+        missing |= {"templates/emails/order_confirmation/ar.twig", "templates/emails/order_delivered/en.twig"}
     if not missing.issubset(files):
         raise ValueError("Missing required consumer files: " + ", ".join(sorted(missing - files.keys())))
     for name in files:

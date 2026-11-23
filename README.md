@@ -156,7 +156,7 @@ Detailed processing steps:
 | `POST /api/v2/email/enqueue` | Atomic acceptance with stable consumer/key identity; `202 accepted` |
 | `GET /api/v2/email/receipt` | Same-key receipt recovery; `200` or point-in-time `404` |
 | `POST /api/v2/email/synthetic` | Isolated encrypted no-send recording; `202 recorded` |
-| API-key / email-worker / queue-status / synthetic-purge CLI | [Operator commands and configuration](docs/reference/configuration.md) |
+| API-key / email-worker / queue-status / synthetic-purge / cache-clear CLI | [Operator commands and configuration](docs/reference/configuration.md) |
 
 The [HTTP reference](docs/CHANNEL_DELIVERY_API.md) links the complete contracts and template fields.
 Application classes and vendor internals are implementation details, not a PHP library API.

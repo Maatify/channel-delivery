@@ -52,16 +52,19 @@ return [
     EmailTransportInterface::class   => get(SmtpEmailTransport::class),
 
     // ── Renderer ──────────────────────────────────────────────
-    // APP_NAME and SUPPORT_EMAIL are injected as Twig globals
-    // so templates can use {{ app_name }} and {{ support_email }}
-    // without requiring the caller to pass them in the payload context.
     TwigEmailRenderer::class         => factory(function (): TwigEmailRenderer {
+        $root = dirname(__DIR__, 2);
+        $appName = (string)($_ENV['APP_NAME'] ?? 'App');
+
         return new TwigEmailRenderer(
-            templatesPath: dirname(__DIR__, 2) . '/templates',
+            templatesPath: $root . '/templates',
             globals    : [
-                'app_name'      => (string)($_ENV['APP_NAME'] ?? 'App'),
+                'app_name'      => $appName,
                 'support_email' => (string)($_ENV['SUPPORT_EMAIL'] ?? ''),
-            ]
+                'brand_name_ar' => (string)($_ENV['APP_BRAND_NAME_AR'] ?? $appName),
+                'brand_name_en' => (string)($_ENV['APP_BRAND_NAME_EN'] ?? $appName),
+            ],
+            cachePath: $root . '/var/cache/twig',
         );
     }),
     EmailRendererInterface::class    => get(TwigEmailRenderer::class),

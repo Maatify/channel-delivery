@@ -6,8 +6,7 @@ In 2.1.0, [#15](https://github.com/Maatify/channel-delivery/issues/15) delegates
 pre-claim and safe in-batch reconnects to email-delivery 1.3.0. The service runner
 retains the exit-for-restart policy and probes its tracked connection only after an
 escaped batch failure. The engine now owns stale-job recovery through the existing
-TIMESTAMP lease. See the [current worker guide](../how-to/run-worker.md) and
-[upgrade procedure](../upgrade/2.1.0.md). The decision below describes the original
+TIMESTAMP lease. See the [current worker guide](../how-to/run-worker.md) for rollout details. The decision below describes the original
 between-batch implementation.
 
 ## Context

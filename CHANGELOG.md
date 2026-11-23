@@ -21,6 +21,9 @@ All notable changes to this project will be documented in this file.
 - Apply the service-owned `DB_SESSION_WAIT_TIMEOUT` to worker and shared sessions.
 - Add a read-only queue-stall command and optional per-worker heartbeats.
 
+- Support optional Arabic and English brand names in Twig and provide a CLI to
+  refresh the release's compiled Twig and DI caches during deployment.
+
 ### Removed
 
 - Retire the standalone stuck-job reset command. Disable its schedule during the

@@ -33,7 +33,9 @@ of implementation validation.
    backfill. Keys intentionally sharing a namespace have access to the same
    receipts, so approve that security boundary explicitly. Do not rebind an
    existing key to another consumer; use a new key instead.
-4. Test v1 plus v2 accept/replay/lookup with a dedicated test intent. Deploy
+4. Refresh the release's compiled caches before restarting affected processes.
+   Follow the [cache procedure](../reference/configuration.md#compiled-caches).
+5. Test v1 plus v2 accept/replay/lookup with a dedicated test intent. Deploy
    v2-ready callers only after schemas and bindings are ready. The worker consumes
    both legacy and receipt-bound queue jobs without a mail-policy change.
 
