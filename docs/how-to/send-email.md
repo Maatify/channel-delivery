@@ -67,6 +67,10 @@ Optional fields:
 * `entity_id`
 * `priority`
 * `context`
+* `reply_to`, a valid email address when supplied as a nonempty string. This sets
+  the address that receives replies. For an admin notification, use the admin's
+  address as `recipient` and the customer's address as `reply_to`. v1 ignores
+  missing, empty and non-string values.
 
 A successful enqueue returns:
 
@@ -88,6 +92,10 @@ The template also uses global values injected by the service:
 These globals do not need to be sent by the caller.
 
 ### Example: PHP (Guzzle)
+
+Install `guzzlehttp/guzzle` in your **consumer project's** Composer dependencies
+to run this example. You can also use the [shell cURL example](../../examples/enqueue-v1.sh)
+or the [PHP cURL example](../examples/basic-usage.php).
 
 ```php
 use GuzzleHttp\Client;

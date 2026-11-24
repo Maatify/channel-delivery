@@ -50,8 +50,10 @@ an instruction to enqueue later. Nothing copies these records into the real queu
 
 Invalid JSON400; auth401/IP or consumer403; unsupported media415; invalid fields,
 shapes or Idempotency-Key422; body too large413; current shared rate quota429.
-Missing/invalid server retention, storage/schema/crypto failures or unknown commit
-return503 with `{"error":"recording_unavailable","recording":"unknown"}`.
+Missing/invalid server retention, unmet
+[database session preconditions](../reference/configuration.md#database-sessions),
+storage/schema/crypto failures or unknown commit return HTTP 503 with
+`{"error":"recording_unavailable","recording":"unknown"}`.
 Framework/bootstrap errors can return generic5xx. Never turn an unavailable
 synthetic call into real email enqueue or claim a confirmed record after failure.
 

@@ -81,7 +81,8 @@ GET /health
 
 ### Purpose
 
-Checks whether the service is alive and whether database connectivity is healthy.
+Checks whether the handler can execute `SELECT 1` on its injected database
+connection.
 
 ### Success Response
 
@@ -94,6 +95,9 @@ Checks whether the service is alive and whether database connectivity is healthy
 
 ### Degraded Response
 
+If `SELECT 1` fails after the handler receives a PDO connection, the handler
+returns HTTP 503 with this JSON body.
+
 ```json
 {
   "status": "degraded",
@@ -103,8 +107,13 @@ Checks whether the service is alive and whether database connectivity is healthy
 
 ### Status Codes
 
-* `200 OK` → service healthy
-* `503 Service Unavailable` → service alive but database degraded
+* `200 OK` means the database query succeeded.
+* `503 Service Unavailable` with the body above means the handler's query failed.
+
+PDO creation can fail before the handler runs. Connection setup, framework and
+bootstrap failures can produce a generic HTTP 5xx or no response. Treat every
+non-2xx or timeout as unhealthy. The JSON above applies to failures inside the
+handler. A healthy database probe does not check the worker or SMTP.
 
 ---
 

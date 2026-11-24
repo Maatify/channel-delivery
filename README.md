@@ -255,36 +255,10 @@ Queue payloads and sensitive data are encrypted using **AES-256-GCM** through `m
 | `CRYPTO_ACTIVE_KEY_ID` | Identifier of the active encryption key |
 | `CRYPTO_KEYS`          | JSON array containing encryption keys   |
 
-Configuration shape only — the placeholder below is deliberately not a usable key.
-Replace it with a new private value generated for this installation:
-
-```env
-CRYPTO_ACTIVE_KEY_ID=v1
-CRYPTO_KEYS='[{"id":"v1","key":"<YOUR_UNIQUE_32_BYTE_SECRET>"}]'
-```
-
-Key requirements:
-
-* Key must be **exactly 32 bytes**
-* Keys support **rotation**
-* Old keys remain for **decryption only**
-
-The following existing format produces 32 ASCII key-material bytes from 16 random bytes (128 bits of randomness); it is not 32 random bytes and is not automatically hex-decoded:
-
-```bash
-php -r "echo bin2hex(random_bytes(16));"
-```
-
-Use the locally generated **32-character ASCII string** in place of the placeholder
-above. Generate a fresh private value for each installation; never copy a published
-example key or commit/paste the generated key into source, logs or public messages.
-Keep historical keys privately when rotating keys for retained data.
-
-Key requirements:
-
-* Must be **exactly 32 raw bytes** (32 ASCII characters in this example)
-* Used as the symmetric encryption key for AES-256-GCM
-* Keys support **rotation**
+`CRYPTO_KEYS` is empty in the example configuration. Set a private 32-byte key
+using the [generation and rotation procedure](docs/reference/configuration.md#encryption-keys)
+before using the queue or synthetic endpoint. Keep the keys needed for retained
+queue data, receipt replay and synthetic records.
 
 ---
 

@@ -23,7 +23,9 @@ of implementation validation.
 3. [Provision a consumer binding](#provision-a-consumer-binding) for each key used for real v2.
 4. Refresh the release's compiled caches before restarting affected processes.
    Follow the [cache procedure](../reference/configuration.md#compiled-caches).
-5. Test v1 plus v2 accept/replay/lookup with a dedicated test intent. Deploy
+5. Verify the [database session preconditions](../reference/configuration.md#database-sessions),
+   including inherited `autocommit=1` on fresh v2 connections. Test v1 plus v2
+   accept/replay/lookup with a dedicated test intent. Deploy
    v2-ready callers only after schemas and bindings are ready. The worker consumes
    both legacy and receipt-bound queue jobs without a mail-policy change.
 
@@ -61,11 +63,10 @@ unchanged, including in Athar. Preserve historical crypto key material required
 by library fingerprints across rotation. Follow the installed library's key
 rotation and receipt retention contract; do not silently regenerate keys.
 
-Each v2 write/lookup creates a new nonpersistent exception-mode PDO and sets its
-session timezone to `+00:00`. Legacy/shared PDO timezone is not changed. The library worker detects the
-receipt binding and uses UTC due/retry/sent clocks for keyed jobs while retaining
-legacy timing for unbound rows; the integration test exercises a non-UTC shared
-session.
+Each v2 enqueue or lookup opens a dedicated connection and sets its time zone to
+`+00:00`. An inherited autocommit value of 0 causes HTTP 503 before the library
+starts a transaction. The worker uses UTC due, retry and sent clocks for keyed
+jobs and retains legacy timing for unbound rows.
 
 ## Recovery / rollback
 

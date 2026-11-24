@@ -19,7 +19,9 @@ policy. Enable the optional endpoint only after the following operator steps:
    an operator/owner decision; tests use3600 seconds solely as a fixture.
 4. Refresh the release's compiled caches before restarting affected processes.
    Follow the [cache procedure](../reference/configuration.md#compiled-caches).
-   Check `synthetic.sh` against a test service with a bound key and confirm HTTP
+   Verify the [database session preconditions](../reference/configuration.md#database-sessions),
+   including inherited `autocommit=1` on fresh synthetic connections. Check
+   `synthetic.sh` against a test service with a bound key and confirm HTTP
    202 `recorded`. An active key with no binding receives 403. Check that v1 still
    accepts jobs and that synthetic only adds a row to its own table.
    [Test examples](../../examples/README.md)
@@ -38,8 +40,9 @@ policy. Enable the optional endpoint only after the following operator steps:
    Success prints `{"purged":N}`. Unavailable/unknown commit prints no success
    count and exits1; bad CLI arguments exit2. Grant access only to trusted operators.
 
-Both recording and maintenance delegate to the released package. Every operation
-opens a new exception-mode, autocommit, UTC PDO; uncertain sessions are discarded.
+Recording and maintenance open a fresh exception-mode PDO and set its session
+time zone to `+00:00`. The installed package rejects connections with
+autocommit disabled before starting a transaction. Uncertain sessions are discarded.
 A lost recording commit may leave an inert row; retry may append another, with no
 real enqueue fallback. Expiry is computed from database UTC, not PHP timezone.
 Expired rows remain until cleanup commits. Retain decrypt keys through the chosen

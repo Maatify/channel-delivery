@@ -93,6 +93,8 @@ All v2 responses have `Cache-Control: no-store`.
 
 503 from the atomic handler is
 `{"error":"enqueue_unavailable","acceptance":"unknown","retry_same_key":true}`.
+Failure to meet the [database session preconditions](../reference/configuration.md#database-sessions)
+can produce this response during enqueue or receipt lookup.
 A lost response/timeout can also conceal committed acceptance. Persist the intent
 and key in the caller **before** HTTP, query its receipt, and retry only that same
 key/content. Handle transport and generic HTTP 5xx as uncertain too. There is no

@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [2.1.0]
 
+### Security
+
+- Update Twig to 3.31.1 to address nine vendor security advisories
+  ([#19](https://github.com/Maatify/channel-delivery/issues/19),
+  [#20](https://github.com/Maatify/channel-delivery/pull/20)).
+
 ### Fixed
 
 - Use the email-delivery 1.3.0 connection factory to recover before a claim and retry
