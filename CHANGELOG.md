@@ -17,6 +17,10 @@ All notable changes to this project will be documented in this file.
 - Write the worker heartbeat through an exclusive temporary file and bound status
   reads. Document lease sizing and rollback with the previous release's cache layout.
 
+- Block worker startup or reconnect while historical pending rows have exhausted
+  the attempt cap. Document operator settlement and rollback.
+- Alert on unrecorded outcome writes and processing leases exhausted at the cap.
+
 ### Added
 
 - Recover expired processing leases automatically. The lease defaults to 300 seconds

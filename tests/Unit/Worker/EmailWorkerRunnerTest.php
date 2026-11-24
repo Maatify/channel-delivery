@@ -402,7 +402,7 @@ final class EmailWorkerRunnerTest extends TestCase
         return $pdo;
     }
 
-    /** @return Closure(Closure(): PDO): EmailQueueWorker */
+    /** @return Closure(Closure(): PDO, \Psr\Log\LoggerInterface): EmailQueueWorker */
     private function workerFactory(): Closure
     {
         $crypto = (new \ReflectionClass(CryptoProvider::class))->newInstanceWithoutConstructor();
@@ -410,7 +410,7 @@ final class EmailWorkerRunnerTest extends TestCase
         $transport = $this->createMock(EmailTransportInterface::class);
         $contexts = $this->createMock(CryptoContextProviderInterface::class);
 
-        return fn (Closure $connect): EmailQueueWorker => new EmailQueueWorker($connect, $crypto, $renderer, $transport, $contexts, $this->logger);
+        return static fn (Closure $connect, \Psr\Log\LoggerInterface $logger): EmailQueueWorker => new EmailQueueWorker($connect, $crypto, $renderer, $transport, $contexts, $logger);
     }
 
     private static function disconnected(): PDOException

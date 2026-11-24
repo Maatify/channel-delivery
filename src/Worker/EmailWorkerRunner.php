@@ -30,6 +30,7 @@ final class EmailWorkerRunner
 {
     public const EXIT_OK = 0;
     public const EXIT_CONNECTION_UNAVAILABLE = 1;
+    public const EXIT_QUEUE_UPGRADE_BLOCKED = 3;
     public const DEFAULT_MAX_CONNECTION_FAILURES = 3;
 
     /** mysqlnd notices raised while talking to a connection the server already closed. */
@@ -38,7 +39,7 @@ final class EmailWorkerRunner
     /** @var Closure(): PDO */
     private readonly Closure $connect;
 
-    /** @var Closure(Closure(): PDO): EmailQueueWorker */
+    /** @var Closure(Closure(): PDO, LoggerInterface): EmailQueueWorker */
     private readonly Closure $buildWorker;
 
     /** @var Closure(int): void */
@@ -46,7 +47,7 @@ final class EmailWorkerRunner
 
     /**
      * @param Closure(): PDO                  $connect     Opens a fresh connection with the service's session settings.
-     * @param Closure(Closure(): PDO): EmailQueueWorker  $buildWorker Builds a worker that opens its own connections through the callback.
+     * @param Closure(Closure(): PDO, LoggerInterface): EmailQueueWorker  $buildWorker Builds a worker that opens its own connections through the callback.
      * @param (Closure(int): void)|null       $sleep       Pause between loop iterations; defaults to sleep().
      */
     public function __construct(
@@ -67,7 +68,7 @@ final class EmailWorkerRunner
      *                                           A one-shot run (no loop) ends at its first connection failure.
      * @param string|null $stateFile             Optional per-process heartbeat for the queue status monitor.
      *
-     * @return int EXIT_OK, or EXIT_CONNECTION_UNAVAILABLE when the run ended on connection failures.
+     * @return int A worker exit code for completion, connection failure, or blocked upgrade.
      */
     public function run(
         int     $batchSize,
@@ -81,6 +82,10 @@ final class EmailWorkerRunner
         }
         $limit = $loop ? $maxConnectionFailures : 1;
         $state = $stateFile === null ? null : new EmailWorkerStateFile($stateFile, $this->logger);
+        $outcomes = new EmailWorkerOutcomeLogger(
+            $this->logger,
+            $stateFile === null ? null : EmailWorkerStateFile::read($stateFile),
+        );
 
         $this->logger->info('Worker started', [
             'batch'                   => $batchSize,
@@ -113,12 +118,27 @@ final class EmailWorkerRunner
 
         do {
             try {
-                $worker ??= ($this->buildWorker)($connect);
+                $worker ??= ($this->buildWorker)($connect, $outcomes);
+                $previousOutcomeFailures = $outcomes->outcomeWriteFailures();
                 $worker->processBatch($batchSize);
                 $connectionFailures = 0;
                 $batchFailures = 0;
-                $lastSuccess = time();
-                $this->logger->info('Batch processed', ['limit' => $batchSize]);
+                $outcomeFailures = $outcomes->outcomeWriteFailures() - $previousOutcomeFailures;
+                if ($outcomeFailures > 0) {
+                    $this->logger->error('Worker batch completed with unrecorded outcomes', [
+                        'outcome_write_failures' => $outcomeFailures,
+                    ]);
+                } else {
+                    $lastSuccess = time();
+                    $this->logger->info('Batch processed', ['limit' => $batchSize]);
+                }
+            } catch (ExhaustedPendingJobs $failure) {
+                $state?->write($this->state($batchFailures, 0, $lastSuccess, $outcomes));
+                $this->logger->critical('Worker startup or reconnect blocked by exhausted pending email jobs', [
+                    'message' => $failure->getMessage(),
+                ]);
+
+                return self::EXIT_QUEUE_UPGRADE_BLOCKED;
             } catch (\Throwable $failure) {
                 ++$batchFailures;
                 $failedToConnect = $pdo === null;
@@ -135,7 +155,7 @@ final class EmailWorkerRunner
                     $worker = null;
                     ++$connectionFailures;
                     if ($connectionFailures >= $limit) {
-                        $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess));
+                        $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess, $outcomes));
 
                         return $this->exitForRestart($connectionFailures, $limit, $failure);
                     }
@@ -151,7 +171,7 @@ final class EmailWorkerRunner
                 }
             }
 
-            $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess));
+            $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess, $outcomes));
             $this->pause($loop, $sleepSeconds);
         } while ($loop);
 
@@ -206,7 +226,7 @@ final class EmailWorkerRunner
         }
     }
 
-    private function state(int $batchFailures, int $connectionFailures, ?int $lastSuccess): EmailWorkerState
+    private function state(int $batchFailures, int $connectionFailures, ?int $lastSuccess, EmailWorkerOutcomeLogger $outcomes): EmailWorkerState
     {
         $pid = getmypid();
 
@@ -216,6 +236,8 @@ final class EmailWorkerRunner
             $batchFailures,
             $connectionFailures,
             $lastSuccess,
+            $outcomes->lastOutcomeWriteFailedAt(),
+            $outcomes->lastLeaseExhaustedAt(),
         );
     }
 }

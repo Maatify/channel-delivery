@@ -26,8 +26,9 @@ php scripts/email_worker.php --batch=50 --loop --sleep=5
 
 The worker exits `0` when a one-shot run ends without an unavailable connection,
 `1` on database connection failure or after reaching the reconnect limit in loop
-mode, and `2` on invalid arguments. A one-shot run with a batch error on a usable
-session logs the failure even though its exit code is `0`. Use the worker log and
+mode, `2` on invalid arguments, and `3` when exhausted pending jobs require operator
+settlement. A one-shot run with a batch error on a usable session logs the failure
+even though its exit code is `0`. Use the worker log and
 queue status report to verify processing. Valued options accept `--name=value`
 or `--name value`.
 
@@ -47,14 +48,18 @@ write. A claim transaction is attempted once per batch.
 | Connection opening fails below the restart limit | `Worker database connection failed` | warning |
 | Batch raises an error after opening its connection | `Worker batch failed` | error |
 | Consecutive connection failures reach the limit | `Worker exiting for restart: database connection unavailable` | critical |
-| Batch returns successfully | `Batch processed` | info |
+| Batch finishes without a reported outcome-write error | `Batch processed` | info |
+| Engine returns after a failed outcome write on a usable session | `Worker batch completed with unrecorded outcomes` | error |
+| Connection check finds exhausted pending rows | `Worker startup or reconnect blocked by exhausted pending email jobs` | critical |
 
 The loop returns `1` after `--max-connection-failures` consecutive failed
 iterations caused by an unavailable connection or a session still in a transaction.
 A one-shot run returns `1` on the first such failure. A successful batch or a
 batch error on a usable session resets the connection-failure count. The latter
 still increments the batch-failure counter for the stall monitor. The HTTP path
-keeps its request-scoped connections.
+keeps its request-scoped connections. A batch that returns after an unrecorded
+outcome leaves the last successful-batch time intact. Connection failures keep
+their own restart counter.
 
 ## Processing lease
 
@@ -77,7 +82,7 @@ If the send succeeds but the status cannot be saved, the engine logs
 lease expires, with possible redelivery. After four attempts, an expired row
 becomes `failed` with `processing_lease_expired` and no additional send.
 Delivery is at-least-once. During an upgrade, disable any old scheduled reset
-before starting workers that use leases. [Upgrade procedure](../upgrade/2.1.0.md)
+before starting workers that use leases. Review any exhausted pending jobs left by the previous reset. [Upgrade procedure](../upgrade/2.1.0.md)
 
 ## Supervisor Configuration
 
@@ -163,7 +168,31 @@ It prints one JSON report and exits `0` within thresholds, `1` on an alert or wh
 the status is unavailable, `2` on bad arguments:
 
 ```json
-{"status":"ok","alerts":[],"queue":{"due_pending":0,"oldest_due_pending_age_seconds":null},"workers":[{"state_file":"/path/to/channel-delivery/var/worker/email_worker_00.json","available":true,"pid":1234,"updated_seconds_ago":3,"consecutive_batch_failures":0,"consecutive_connection_failures":0,"last_batch_succeeded_at":1700000000}],"thresholds":{"max_pending_age_seconds":600,"max_batch_failures":3,"max_heartbeat_age_seconds":600}}
+{
+  "status": "ok",
+  "alerts": [],
+  "queue": {"due_pending": 0, "oldest_due_pending_age_seconds": null},
+  "exhausted_pending": false,
+  "outcome_tracking": "state_files",
+  "workers": [{
+    "state_file": "/path/to/channel-delivery/var/worker/email_worker_00.json",
+    "available": true,
+    "pid": 1234,
+    "updated_seconds_ago": 3,
+    "consecutive_batch_failures": 0,
+    "consecutive_connection_failures": 0,
+    "last_batch_succeeded_at": 1700000000,
+    "outcome_tracking": true,
+    "last_outcome_write_failed_at": null,
+    "last_lease_exhausted_at": null
+  }],
+  "thresholds": {
+    "max_pending_age_seconds": 600,
+    "max_batch_failures": 3,
+    "max_heartbeat_age_seconds": 600,
+    "outcome_alert_window_seconds": 600
+  }
+}
 ```
 
 - `oldest_due_pending_age_seconds` is the time since the oldest `pending` message
@@ -182,6 +211,33 @@ than **600 seconds** (`--max-pending-age`), a worker has **3 or more** consecuti
 batch failures (`--max-batch-failures`), a worker's heartbeat is older than
 **600 seconds** (`--max-heartbeat-age`, alert `worker_heartbeat_stale`), a listed state
 file is missing or invalid, or the script itself reports `unavailable`.
+
+The report also alerts on `exhausted_pending` if any pending job has four or more
+attempts, including jobs with a future schedule or retry time. This check works
+without heartbeat files. Use the upgrade procedure to have an operator review
+and settle the jobs before retrying the worker.
+
+Pass every worker's `--state-file` to monitor delivery outcomes. The report
+distinguishes a queue-only check (`outcome_tracking: "not_configured"`) from state
+file monitoring. It alerts when a listed heartbeat predates outcome tracking.
+The worker writes two event timestamps alongside the heartbeat.
+
+- `outcome_write_failed` means that the engine reported a failed database write
+  for a send or a retry/failure outcome on a usable connection. A normal SMTP
+  failure whose retry was recorded keeps its normal retry behavior and does
+  not produce this alert.
+- `processing_lease_exhausted` means that the engine settled an expired lease at
+  the attempt cap. The database retains these rows as `failed` with
+  `last_error = 'processing_lease_expired'` for later review.
+
+Outcome and attempt-cap events alert for `--outcome-alert-window` seconds
+(default 600). An empty poll or restart using the same state file preserves
+the event timestamps. Size the window to cover the lease, the longest expected
+batch and the monitor interval. Retain the original logs for historical incidents.
+Investigate the database write failure, then check queue state and the worker
+logs for a recorded outcome or a settled lease. Expiry of the alert window
+indicates elapsed time since the last observed event. It cannot establish
+SMTP delivery or authorize a manual resend.
 
 A healthy worker with the default `--sleep=5` drains due messages within seconds,
 unless the backlog is larger than its throughput. Raise `--max-pending-age` if your

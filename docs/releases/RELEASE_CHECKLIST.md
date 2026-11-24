@@ -13,7 +13,9 @@ Record preparation, CI, publication and deployment as separate stages.
   Maatify logo/badges/author/license/footer, link targets and rendered layout.
 - Verify upgrade order, consumer bindings, receipt/key retention, optional synthetic
   storage, lease compatibility on the actual service schema, old reset schedule
-  removal, and cache/worker restart instructions.
+  removal, historical attempt settlement, outcome monitoring, and cache/worker
+  restart instructions. Re-run the worker upgrade and outcome tests against the
+  exact locked engine reference.
 - Exercise the actual consumer shell/PHP examples on an isolated test service;
   no live SMTP or production data. Remove complete credential values from examples.
 - Review community/security policy and preserve approved1.x support; retain the existing 2.x security commitment. Confirm additional channels remain planned.

@@ -13,10 +13,13 @@ final readonly class EmailWorkerState
         public int  $consecutiveBatchFailures,
         public int  $consecutiveConnectionFailures,
         public ?int $lastBatchSucceededAt,
+        public ?int $lastOutcomeWriteFailedAt = null,
+        public ?int $lastLeaseExhaustedAt = null,
+        public bool $outcomeTracking = true,
     ) {
     }
 
-    /** @return array{pid: int, updated_at: int, consecutive_batch_failures: int, consecutive_connection_failures: int, last_batch_succeeded_at: int|null} */
+    /** @return array{pid: int, updated_at: int, consecutive_batch_failures: int, consecutive_connection_failures: int, last_batch_succeeded_at: int|null, last_outcome_write_failed_at: int|null, last_lease_exhausted_at: int|null} */
     public function toArray(): array
     {
         return [
@@ -25,6 +28,8 @@ final readonly class EmailWorkerState
             'consecutive_batch_failures'      => $this->consecutiveBatchFailures,
             'consecutive_connection_failures' => $this->consecutiveConnectionFailures,
             'last_batch_succeeded_at'         => $this->lastBatchSucceededAt,
+            'last_outcome_write_failed_at'    => $this->lastOutcomeWriteFailedAt,
+            'last_lease_exhausted_at'          => $this->lastLeaseExhaustedAt,
         ];
     }
 
@@ -37,17 +42,24 @@ final readonly class EmailWorkerState
             }
         }
         $lastSuccess = $data['last_batch_succeeded_at'] ?? null;
-        if ($lastSuccess !== null && !is_int($lastSuccess)) {
+        $lastWriteFailure = $data['last_outcome_write_failed_at'] ?? null;
+        $lastExhaustion = $data['last_lease_exhausted_at'] ?? null;
+        if (($lastSuccess !== null && !is_int($lastSuccess))
+            || ($lastWriteFailure !== null && (!is_int($lastWriteFailure) || $lastWriteFailure < 0))
+            || ($lastExhaustion !== null && (!is_int($lastExhaustion) || $lastExhaustion < 0))) {
             return null;
         }
 
-        /** @var array{pid: int, updated_at: int, consecutive_batch_failures: int, consecutive_connection_failures: int} $data */
+        /** @var array{pid: int, updated_at: int, consecutive_batch_failures: int, consecutive_connection_failures: int, last_outcome_write_failed_at?: mixed, last_lease_exhausted_at?: mixed} $data */
         return new self(
             $data['pid'],
             $data['updated_at'],
             $data['consecutive_batch_failures'],
             $data['consecutive_connection_failures'],
             $lastSuccess,
+            $lastWriteFailure,
+            $lastExhaustion,
+            array_key_exists('last_outcome_write_failed_at', $data) && array_key_exists('last_lease_exhausted_at', $data),
         );
     }
 }

@@ -21,14 +21,15 @@ use PDO;
  *   worker stopped or hangs, even when its last counters looked healthy.
  *
  * @phpstan-type QueueSnapshot array{due_pending: int, oldest_due_pending_age_seconds: int|null}
- * @phpstan-type WorkerReport array{state_file: string, available: bool, pid?: int, updated_seconds_ago?: int, consecutive_batch_failures?: int, consecutive_connection_failures?: int, last_batch_succeeded_at?: int|null}
- * @phpstan-type Report array{status: 'ok'|'alert', alerts: list<string>, queue: QueueSnapshot, workers: list<WorkerReport>, thresholds: array{max_pending_age_seconds: int, max_batch_failures: int, max_heartbeat_age_seconds: int}}
+ * @phpstan-type WorkerReport array{state_file: string, available: bool, pid?: int, updated_seconds_ago?: int, consecutive_batch_failures?: int, consecutive_connection_failures?: int, last_batch_succeeded_at?: int|null, outcome_tracking?: bool, last_outcome_write_failed_at?: int|null, last_lease_exhausted_at?: int|null}
+ * @phpstan-type Report array{status: 'ok'|'alert', alerts: list<string>, queue: QueueSnapshot, exhausted_pending: bool, outcome_tracking: 'state_files'|'not_configured', workers: list<WorkerReport>, thresholds: array{max_pending_age_seconds: int, max_batch_failures: int, max_heartbeat_age_seconds: int, outcome_alert_window_seconds: int}}
  */
 final readonly class EmailQueueStallMonitor
 {
     public const DEFAULT_MAX_PENDING_AGE_SECONDS = 600;
     public const DEFAULT_MAX_BATCH_FAILURES = 3;
     public const DEFAULT_MAX_HEARTBEAT_AGE_SECONDS = 600;
+    public const DEFAULT_OUTCOME_ALERT_WINDOW_SECONDS = 600;
 
     private const TABLE = 'cd_email_queue';
 
@@ -74,10 +75,21 @@ final readonly class EmailQueueStallMonitor
      *
      * @return Report
      */
-    public function report(int $maxPendingAgeSeconds, int $maxBatchFailures, int $maxHeartbeatAgeSeconds, array $stateFiles, int $now): array
+    public function report(
+        int $maxPendingAgeSeconds,
+        int $maxBatchFailures,
+        int $maxHeartbeatAgeSeconds,
+        array $stateFiles,
+        int $now,
+        int $outcomeAlertWindowSeconds = self::DEFAULT_OUTCOME_ALERT_WINDOW_SECONDS,
+    ): array
     {
         $queue = $this->queue();
         $alerts = [];
+        $exhaustedPending = ExhaustedPendingJobs::exist($this->pdo);
+        if ($exhaustedPending) {
+            $alerts[] = 'exhausted_pending';
+        }
         if ($queue['oldest_due_pending_age_seconds'] !== null && $queue['oldest_due_pending_age_seconds'] > $maxPendingAgeSeconds) {
             $alerts[] = 'oldest_due_pending_age';
         }
@@ -99,12 +111,24 @@ final readonly class EmailQueueStallMonitor
                 'consecutive_batch_failures'      => $state->consecutiveBatchFailures,
                 'consecutive_connection_failures' => $state->consecutiveConnectionFailures,
                 'last_batch_succeeded_at'         => $state->lastBatchSucceededAt,
+                'outcome_tracking'                => $state->outcomeTracking,
+                'last_outcome_write_failed_at'    => $state->lastOutcomeWriteFailedAt,
+                'last_lease_exhausted_at'          => $state->lastLeaseExhaustedAt,
             ];
             if ($updatedSecondsAgo > $maxHeartbeatAgeSeconds) {
                 $alerts[] = 'worker_heartbeat_stale';
             }
             if ($state->consecutiveBatchFailures >= $maxBatchFailures) {
                 $alerts[] = 'consecutive_batch_failures';
+            }
+            if (!$state->outcomeTracking) {
+                $alerts[] = 'outcome_tracking_unavailable';
+            }
+            if ($state->lastOutcomeWriteFailedAt !== null && $now - $state->lastOutcomeWriteFailedAt <= $outcomeAlertWindowSeconds) {
+                $alerts[] = 'outcome_write_failed';
+            }
+            if ($state->lastLeaseExhaustedAt !== null && $now - $state->lastLeaseExhaustedAt <= $outcomeAlertWindowSeconds) {
+                $alerts[] = 'processing_lease_exhausted';
             }
         }
         $alerts = array_values(array_unique($alerts));
@@ -113,11 +137,14 @@ final readonly class EmailQueueStallMonitor
             'status'     => $alerts === [] ? 'ok' : 'alert',
             'alerts'     => $alerts,
             'queue'      => $queue,
+            'exhausted_pending' => $exhaustedPending,
+            'outcome_tracking' => $stateFiles === [] ? 'not_configured' : 'state_files',
             'workers'    => $workers,
             'thresholds' => [
                 'max_pending_age_seconds'   => $maxPendingAgeSeconds,
                 'max_batch_failures'        => $maxBatchFailures,
                 'max_heartbeat_age_seconds' => $maxHeartbeatAgeSeconds,
+                'outcome_alert_window_seconds' => $outcomeAlertWindowSeconds,
             ],
         ];
     }

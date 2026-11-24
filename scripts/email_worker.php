@@ -25,7 +25,8 @@ declare(strict_types=1);
 //   --state-file=PATH            Optional per-process JSON heartbeat read by
 //                                scripts/email_queue_status.php.
 //
-// Exit codes: 0 finished, 1 database connection unavailable, 2 bad arguments.
+// Exit codes: 0 finished, 1 database connection unavailable, 2 bad arguments,
+//             3 blocked on exhausted pending jobs awaiting operator settlement.
 //
 // Cron entry:
 //   * * * * * php /var/www/scripts/email_worker.php >> /var/log/email_worker.log 2>&1

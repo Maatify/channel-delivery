@@ -27,15 +27,28 @@ final readonly class EmailQueueWorkerFactory
     }
 
     /** @param Closure(): PDO $connect */
-    public function create(Closure $connect): EmailQueueWorker
+    public function create(Closure $connect, ?LoggerInterface $logger = null): EmailQueueWorker
     {
+        $pending = null;
+        $checkedConnect = static function () use ($connect, &$pending): PDO {
+            // Keep a usable session if the read fails before the engine takes ownership.
+            $pending ??= $connect();
+            if (ExhaustedPendingJobs::exist($pending)) {
+                throw new ExhaustedPendingJobs('Review and settle exhausted pending jobs before starting the worker.');
+            }
+            $pdo = $pending;
+            $pending = null;
+
+            return $pdo;
+        };
+
         return new EmailQueueWorker(
-            $connect,
+            $checkedConnect,
             $this->crypto,
             $this->renderer,
             $this->transport,
             $this->contexts,
-            $this->logger,
+            $logger ?? $this->logger,
             $this->processingLeaseSeconds,
         );
     }

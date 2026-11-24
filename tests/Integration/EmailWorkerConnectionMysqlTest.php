@@ -260,7 +260,7 @@ final class EmailWorkerConnectionMysqlTest extends AtomicHttpMysqlTestCase
         return $pdo;
     }
 
-    /** @return Closure(Closure(): PDO): EmailQueueWorker */
+    /** @return Closure(Closure(): PDO, \Psr\Log\LoggerInterface): EmailQueueWorker */
     private function workers(Container $container): Closure
     {
         $container->set(\Psr\Log\LoggerInterface::class, $this->logger);
