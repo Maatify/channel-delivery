@@ -13,9 +13,9 @@
 - [Upgrade](docs/upgrade/2.1.0.md): processing lease, schema checks and worker rollout.
 
 ## Release and community
-- [2.1.0 target](docs/releases/2.1.0.md): candidate changes and qualification.
+- [Latest Stable 2.1.0](docs/releases/2.1.0.md): publication, compatibility and upgrade guidance.
 - [Published 2.0.0](docs/releases/2.0.0.md): published-source evidence, compatibility and curated notes.
-- [Qualification checklist](docs/releases/RELEASE_CHECKLIST.md): exact-SHA gates and archive verification before publication.
+- [Qualification checklist](docs/releases/RELEASE_CHECKLIST.md): exact-SHA gates, archive verification and post-publication reconciliation.
 - [Security](SECURITY.md): support and private reporting.
 - [Contributing](CONTRIBUTING.md): source-clone verification.
 

@@ -22,9 +22,11 @@ Standalone asynchronous email delivery service with encrypted queues, atomic acc
 
 **Artifact target: `2.1.0`** — project release identity; HTTP API versioning is separate.
 
-**Publication snapshot at preparation (2026-11-23):** `2.1.0` is unpublished.
-The published baseline is [2.0.0](docs/releases/2.0.0.md). See the
-[2.1.0 release guide](docs/releases/2.1.0.md) and [upgrade guide](docs/upgrade/2.1.0.md).
+**Latest Stable: [v2.1.0](https://github.com/Maatify/channel-delivery/releases/tag/v2.1.0)**, published on
+2026-11-24 and available on [Packagist](https://packagist.org/packages/maatify/channel-delivery).
+See the [release guide](docs/releases/2.1.0.md) and [upgrade guide](docs/upgrade/2.1.0.md).
+See the tagged README for the historical
+[Publication snapshot at preparation (2026-11-23)](https://github.com/Maatify/channel-delivery/blob/756e649df1135e9111be5ff87764d5042c91e3e1/README.md#maatify-channel-delivery).
 Security support covers both 1.x and 2.x. [Security policy](SECURITY.md)
 
 ## Overview
@@ -170,20 +172,12 @@ See [v2 examples](examples/README.md) for same-key recovery and no-send usage.
 
 ## Installation
 
-The published Stable channel is available through the [registry](https://packagist.org/packages/maatify/channel-delivery).
-A generic `composer create-project maatify/channel-delivery` follows that channel and does not select an unpublished target.
-
-Install the published 2.0.0 project with:
-
-```bash
-composer create-project --prefer-dist --no-dev maatify/channel-delivery channel-delivery 2.0.0
-cd channel-delivery
-```
-
-Once 2.1.0 is published, select it explicitly with:
+A generic `composer create-project maatify/channel-delivery` follows the Stable channel
+on [Packagist](https://packagist.org/packages/maatify/channel-delivery). To pin 2.1.0:
 
 ```bash
 composer create-project --prefer-dist --no-dev maatify/channel-delivery channel-delivery 2.1.0
+cd channel-delivery
 ```
 
 For source review or contribution, use a reviewed checkout:
