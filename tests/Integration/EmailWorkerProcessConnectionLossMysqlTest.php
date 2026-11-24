@@ -105,13 +105,7 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
         self::assertStringContainsString('Email sent but status write failed', $this->log());
         self::assertStringNotContainsString('Batch processed', $this->log());
         self::assertStringNotContainsString('Worker batch completed with unrecorded outcomes', $this->log());
-        $this->assertCleanOutput();
-
-        self::assertNotNull($this->process);
-        self::assertTrue(proc_get_status($this->process)['running']);
-        self::assertTrue(proc_terminate($this->process, 9));
-        proc_close($this->process);
-        $this->process = null;
+        $killedPid = $this->killWorker();
 
         $report = $monitor->report(600, 3, 600, [$path], time());
         self::assertSame(['outcome_write_failed'], $report['alerts'], 'The monitor must alert without a completed batch.');
@@ -121,18 +115,93 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
         self::assertNotNull($interrupted->lastOutcomeWriteFailedAt);
         self::assertSame('2', self::scalar($this->pdo, "SELECT COUNT(*) FROM cd_email_queue WHERE status = 'processing' AND attempts = 1"));
 
+        $restarted = $this->restartWorker($path, $killedPid);
+        self::assertSame($interrupted->lastOutcomeWriteFailedAt, $restarted->lastOutcomeWriteFailedAt);
+        self::assertSame(['outcome_write_failed'], $monitor->report(600, 3, 600, [$path], time())['alerts']);
+    }
+
+    public function testLeaseExhaustionRemainsVisibleAfterWorkerIsKilledMidBatch(): void
+    {
+        [$app] = $this->application();
+        $path = $this->processDirectory() . '/state.json';
+        $previousHeartbeat = time() - 2;
+        (new EmailWorkerStateFile($path, new NullLogger()))->write(new EmailWorkerState(1, $previousHeartbeat, 0, 0, $previousHeartbeat));
+        $monitor = new EmailQueueStallMonitor($this->pdo);
+        self::assertSame('ok', $monitor->report(600, 3, 600, [$path], time())['status']);
+
+        self::assertSame(202, $this->request($app, key: 'lease-process-exhausted')->getStatusCode());
+        self::assertSame(202, $this->request($app, key: 'lease-process-in-flight')->getStatusCode());
+        $this->pdo->exec("UPDATE cd_email_queue SET status = 'processing', attempts = 4,
+            updated_at = NOW() - INTERVAL 600 SECOND WHERE id = 1");
+        $this->pdo->exec("UPDATE cd_email_queue SET scheduled_at = '2000-01-01 00:00:00' WHERE id = 2");
+
+        // The worker settles the expired row at claim time, then blocks in the other job's transport.
+        $this->startWorker(delayFirstSend: 60, stateFile: $path);
+        $this->waitFor(fn (): bool => str_contains($this->log(), 'Recording transport invoked'));
+        self::assertStringContainsString('"reason":"processing_lease_expired"', $this->log());
+        self::assertStringNotContainsString('Batch processed', $this->log());
+        $killedPid = $this->killWorker();
+
+        self::assertSame('1', self::scalar($this->pdo, "SELECT COUNT(*) FROM cd_email_queue
+            WHERE id = 1 AND status = 'failed' AND attempts = 4 AND last_error = 'processing_lease_expired' AND sent_at IS NULL"));
+        self::assertSame('1', self::scalar($this->pdo, "SELECT COUNT(*) FROM cd_email_queue
+            WHERE id = 2 AND status = 'processing' AND attempts = 1 AND sent_at IS NULL"));
+        self::assertSame(
+            ['processing_lease_exhausted'],
+            $monitor->report(600, 3, 600, [$path], time())['alerts'],
+            'The monitor must alert without a completed batch.',
+        );
+        $interrupted = EmailWorkerStateFile::read($path);
+        self::assertNotNull($interrupted);
+        self::assertSame($killedPid, $interrupted->pid);
+        self::assertSame($previousHeartbeat, $interrupted->updatedAt, 'Settling a lease does not refresh the heartbeat.');
+        self::assertNotNull($interrupted->lastLeaseExhaustedAt);
+
+        $restarted = $this->restartWorker($path, $killedPid);
+        self::assertSame($interrupted->lastLeaseExhaustedAt, $restarted->lastLeaseExhaustedAt);
+        self::assertSame(['processing_lease_exhausted'], $monitor->report(600, 3, 600, [$path], time())['alerts']);
+        self::assertStringNotContainsString('"reason":"processing_lease_expired"', $this->log());
+    }
+
+    private function killWorker(): int
+    {
+        self::assertNotNull($this->process);
+        $process = $this->process;
+        $before = proc_get_status($process);
+        self::assertTrue($before['running']);
+        self::assertTrue(proc_terminate($process, 9));
+        $this->waitFor(static function () use ($process): bool {
+            $status = proc_get_status($process);
+            if ($status['running']) {
+                return false;
+            }
+            self::assertTrue($status['signaled']);
+            self::assertSame(9, $status['termsig'], 'The worker was killed by SIGKILL.');
+
+            return true;
+        });
+        proc_close($process);
+        $this->process = null;
+        $this->assertCleanOutput();
+
+        return $before['pid'];
+    }
+
+    private function restartWorker(string $path, int $killedPid): EmailWorkerState
+    {
         self::assertTrue(unlink($this->directory . '/worker.log'));
         $this->startWorker(stateFile: $path);
         self::assertNotNull($this->process);
         $restartPid = proc_get_status($this->process)['pid'];
+        self::assertNotSame($killedPid, $restartPid);
         $this->waitFor(static fn (): bool => EmailWorkerStateFile::read($path)?->pid === $restartPid);
         $restarted = EmailWorkerStateFile::read($path);
         self::assertNotNull($restarted);
-        self::assertSame($interrupted->lastOutcomeWriteFailedAt, $restarted->lastOutcomeWriteFailedAt);
-        self::assertSame(['outcome_write_failed'], $monitor->report(600, 3, 600, [$path], time())['alerts']);
         self::assertNotNull($restarted->lastBatchSucceededAt, 'The restarted worker completed an empty poll.');
         self::assertStringNotContainsString('Recording transport invoked', $this->log());
         $this->assertCleanOutput();
+
+        return $restarted;
     }
 
     private function assertCleanOutput(): void
