@@ -119,12 +119,10 @@ Optional context fields:
 * `customer_phone`
 * `form_subject`
 
-Automatically injected template globals:
-
-* `app_name`
-* `support_email`
-
-These globals do not need to be sent by the caller.
+The bundled templates use `app_name` and `support_email`. Twig also exposes
+`brand_name_ar` and `brand_name_en` for templates that reference them. The worker
+sets `lang` in the render context from the message's `language`. These values
+are supplied by the service. See the [complete template globals reference](../CHANNEL_DELIVERY_API.md#shared-template-globals).
 
 ## Success Response
 

@@ -13,7 +13,7 @@ populated process environment. Keep secrets out of source and the web document r
 | APP_ENV |`production` enables compiled DI cache at var/cache/di; use development locally |
 | APP_DEBUG |PHP boolean validation; false/0/off/no hide response exception details; server logging stays enabled |
 | APP_NAME / SUPPORT_EMAIL |Template globals, default App / empty; configure your own branding |
-| APP_BRAND_NAME_AR / APP_BRAND_NAME_EN | Optional Twig globals for the Arabic and English brand names. Both default to APP_NAME. |
+| APP_BRAND_NAME_AR / APP_BRAND_NAME_EN | Optional Twig globals for the Arabic and English brand names. Each uses APP_NAME when unset. Applies to templates that reference the corresponding global. |
 | DB_HOST / DB_PORT / DB_DATABASE |MySQL DSN, defaults127.0.0.1 /3306 /channel_delivery |
 | DB_USERNAME / DB_PASSWORD |Required database credentials |
 | DB_SESSION_WAIT_TIMEOUT |Session `wait_timeout` seconds applied on every new shared/worker connection (driver init command); empty uses 28800, MySQL's compiled default; integer 1..31536000, anything else fails the connection setup |
@@ -72,8 +72,9 @@ direct connections. Match your actual proxy chain and never whitelist arbitrary 
 SYNTHETIC_EMAIL_RETENTION_SECONDS must be an explicit integer1..2147483647 before
 recording/maintenance can operate; no business retention default is chosen.
 Missing/invalid config disables that optional path, not real email. Expired rows
-remain until trusted cleanup commits; monitor backlog and capacity. The library's
-synthetic004 schema is separate from service004 consumer bindings.
+remain until trusted cleanup commits; monitor backlog and capacity. Configure
+both service 004 consumer bindings and the installed package's synthetic table.
+See the [synthetic-only setup](../how-to/synthetic-email-operations.md).
 
 ## Commands
 

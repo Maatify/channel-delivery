@@ -87,6 +87,8 @@ before starting workers that use leases. Review any exhausted pending jobs left 
 ## Supervisor Configuration
 
 For production, you should run the worker under a process manager like **Supervisor**.
+Prepare the [persistent state directory](#prepare-the-worker-state-directory)
+before starting the workers.
 
 Create a configuration file at `/etc/supervisor/conf.d/channel-delivery-email.conf`:
 
@@ -99,16 +101,14 @@ autostart=true
 autorestart=true
 startsecs=0
 user=www-data
+umask=027
 numprocs=2
 redirect_stderr=true
-stdout_logfile=/path/to/channel-delivery/var/log/email_worker.log
+stdout_logfile=/path/to/channel-delivery/var/log/email_worker_%(process_num)02d.log
 ```
 
-Give each process its own `--state-file` in an existing local directory writable by
-the worker and readable by the monitor. Keep that directory outside the public
-document root and restrict writes to the worker account and deployment operators.
-Create it outside versioned release directories so a deployment uses the same paths.
-Create the directory for `stdout_logfile` before loading the Supervisor configuration.
+Create the log directory before loading the Supervisor configuration. Each
+process has its own state and log file.
 
 Keep `startsecs=0`. With Supervisor's default `startsecs=1`, a worker that exits within
 its first second counts as a failed start. That happens, for example, with
@@ -123,15 +123,17 @@ less often: each process then lives at least about 10 seconds while the database
 worker does stop for good, its heartbeat goes stale and the
 [stall monitor](#monitor-queue-stalls) reports `worker_heartbeat_stale`.
 
-Then update Supervisor:
+Load the Supervisor configuration.
 
 ```bash
 sudo supervisorctl reread
 sudo supervisorctl update
-sudo supervisorctl start cd_email_worker:*
 ```
 
 ## systemd
+
+Prepare the [persistent state directory](#prepare-the-worker-state-directory)
+before starting the unit.
 
 ```ini
 # /etc/systemd/system/channel-delivery-email-worker.service
@@ -144,6 +146,7 @@ StartLimitIntervalSec=0
 
 [Service]
 User=www-data
+UMask=0027
 WorkingDirectory=/path/to/channel-delivery
 ExecStart=/usr/bin/php scripts/email_worker.php --batch=50 --loop --sleep=5 --state-file=/var/lib/channel-delivery/worker/email_worker.json
 Restart=always
@@ -153,20 +156,79 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-`Restart=always` restarts the worker after it exits for restart (code `1`).
+Load the unit and start it.
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now channel-delivery-email-worker.service
+```
+
+### Prepare the worker state directory
+
+Create a persistent local directory before starting either example. The
+examples use `www-data` as the worker account and group.
+
+```bash
+sudo install -d -m 0750 -o www-data -g www-data /var/lib/channel-delivery/worker
+```
+
+The worker needs directory write permission for the temporary file and atomic
+replacement. Run the monitor as the worker account, or grant its account group
+read access to the state files and directory traversal. The example umasks
+give state files mode `0640`. Restrict writes to the worker account and deployment
+operators. Keep the directory outside the web root and versioned release
+directories. Use the same paths when replacing or restarting workers.
+
+### Pause restarts for exit code 3
+
+The shown `autorestart=true` and `Restart=always` policies relaunch the process
+on exit `1` and on exit `3`. Code `3` means a worker found exhausted pending
+jobs on startup or reconnect. Another restart leaves the block in place.
+
+Stop the group or unit explicitly so the manager leaves it stopped during
+settlement. Use the command for your process manager.
+
+```bash
+sudo supervisorctl stop 'cd_email_worker:*'
+```
+
+```bash
+sudo systemctl stop channel-delivery-email-worker.service
+```
+
+Suspend any other worker schedules for that queue and verify every worker is
+stopped. Keep the legacy reset disabled. Follow the
+[prior-attempt review and settlement](../upgrade/2.1.0.md#review-prior-attempts-before-starting-workers).
+Once the preflight is clear, start the group with
+`sudo supervisorctl start 'cd_email_worker:*'` or the unit with
+`sudo systemctl start channel-delivery-email-worker.service`. Code `1` remains
+the database connection restart signal.
 
 ## Monitor queue stalls
 
 The API keeps accepting messages (`2xx`) while the worker is stalled, so acceptance
 is not a health signal, and `GET /health` only checks the API's own database
-connection. Check the queue itself with the read-only status script:
+connection. Run the read-only status script from the active release directory
+and pass the exact state paths configured for your manager.
+
+**Supervisor** reads the two files from the `numprocs=2` example.
 
 ```bash
-php scripts/email_queue_status.php --state-file=/var/lib/channel-delivery/worker/email_worker_00.json --state-file=/var/lib/channel-delivery/worker/email_worker_01.json
+php scripts/email_queue_status.php \
+  --state-file=/var/lib/channel-delivery/worker/email_worker_00.json \
+  --state-file=/var/lib/channel-delivery/worker/email_worker_01.json
 ```
 
-It prints one JSON report and exits `0` within thresholds, `1` on an alert or when
-the status is unavailable, `2` on bad arguments:
+**systemd** reads the single file from the unit above.
+
+```bash
+php scripts/email_queue_status.php \
+  --state-file=/var/lib/channel-delivery/worker/email_worker.json
+```
+
+The script prints one JSON report and exits `0` within thresholds, `1` on an
+alert or when the status is unavailable, and `2` on bad arguments. Example
+report for the systemd unit follows.
 
 ```json
 {
@@ -176,7 +238,7 @@ the status is unavailable, `2` on bad arguments:
   "exhausted_pending": false,
   "outcome_tracking": "state_files",
   "workers": [{
-    "state_file": "/path/to/channel-delivery/var/worker/email_worker_00.json",
+    "state_file": "/var/lib/channel-delivery/worker/email_worker.json",
     "available": true,
     "pid": 1234,
     "updated_seconds_ago": 3,
@@ -200,8 +262,15 @@ the status is unavailable, `2` on bad arguments:
   became due for the worker (its `scheduled_at` reached and any `retry_after` passed),
   measured with the worker's own clocks. Messages scheduled for later or waiting out
   a retry backoff are pending on purpose and do not count.
-- `consecutive_batch_failures` comes from each worker's state file: iterations in a
-  row without a successful batch, connection failures included.
+- `consecutive_batch_failures` counts consecutive iterations that raised an
+  exception into the runner's batch-error handler, including connection
+  failures. It resets when `processBatch()` returns, even if the engine reports
+  an unrecorded outcome. Exit `3` takes a separate path.
+- `last_batch_succeeded_at` is the time of the last batch in the current process
+  that returned without an outcome-write failure, including an empty poll.
+  Zero batch failures alone says nothing about whether an outcome was saved
+  or a message was delivered. Check the separate outcome alerts within their
+  configured window.
 - `updated_seconds_ago` is the age of the last iteration heartbeat. The worker
   advances it when an iteration ends. A mid-batch outcome event keeps the
   existing heartbeat time, so a stopped or stalled worker still goes stale.

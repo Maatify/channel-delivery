@@ -11,6 +11,7 @@ Use `X-Api-Key` and `Content-Type: application/json`, with the same active-key,
 IP whitelist, server-owned consumer binding and existing shared per-key rate limit
 as real v2 email. A rotated key keeps the operator-approved namespace. The caller
 cannot select a namespace in its request. Missing binding returns403.
+See the [synthetic-only schema and binding setup](../how-to/synthetic-email-operations.md).
 
 The JSON field names, byte bounds, strict integer rules and raw JSON shape checks
 are **shared** with [atomic email](email-atomic.md). Maximum raw body is1MiB before

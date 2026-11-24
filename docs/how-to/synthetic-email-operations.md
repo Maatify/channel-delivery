@@ -3,19 +3,26 @@
 The source change does not deploy anything, execute production SQL or alter mail
 policy. Enable the optional endpoint only after the following operator steps:
 
-1. Install the committed dependency lock (email-delivery 1.3.0) on PHP8.4+.
-2. Keep the existing real/service schemas and consumer bindings. Apply the optional
-   **installed package** file
-   `vendor/maatify/email-delivery/schema/mysql/004_email_synthetic_requests.sql`.
-   This is different from service `migrations/004_create_email_consumer_bindings.sql`.
-   Do not copy/rename package SQL, alter historical service001 or automatically
-   migrate at startup. A missing synthetic table does not disable real v1/v2 email.
+1. Install the committed dependency lock (email-delivery 1.3.0) on PHP 8.4+.
+   On a fresh service, apply [service 001–003](../guides/USAGE_GUIDE.md#choose-the-schema)
+   first. An existing v1 service keeps those migrations and existing data.
+2. Apply `migrations/004_create_email_consumer_bindings.sql`, then apply
+   `vendor/maatify/email-delivery/schema/mysql/004_email_synthetic_requests.sql`
+   directly from the installed package. Apply each once. Keep any bindings and
+   migrations already in use. The synthetic-only path needs these two additions.
+   Package 002 and 003 are for real v2 receipts and queue binding.
+   [Provision a consumer binding](atomic-email-rollout.md#provision-a-consumer-binding)
+   for every API key that will call synthetic.
 3. Explicitly configure `SYNTHETIC_EMAIL_RETENTION_SECONDS` as integer seconds
    1..2147483647. No business default is selected. Empty/invalid configuration
    makes only synthetic recording/maintenance unavailable. Production value is
    an operator/owner decision; tests use3600 seconds solely as a fixture.
 4. Refresh the release's compiled caches before restarting affected processes.
    Follow the [cache procedure](../reference/configuration.md#compiled-caches).
+   Check `synthetic.sh` against a test service with a bound key and confirm HTTP
+   202 `recorded`. An active key with no binding receives 403. Check that v1 still
+   accepts jobs and that synthetic only adds a row to its own table.
+   [Test examples](../../examples/README.md)
 5. Schedule trusted cleanup externally and monitor expiry backlog/storage growth.
    No cron is installed by this source change. Example bounded invocation:
 

@@ -21,13 +21,7 @@ and the [2.1.0 target notes](../releases/2.1.0.md).
    SMTP settings and direct/proxy IP handling using the [configuration reference](../reference/configuration.md).
    HTTP, worker and key-creation entry points require the `.env` file; do not assume
    process-only configuration replaces that file. Keep `APP_DEBUG=false` in deployed environments.
-3. On a fresh, backed-up database apply service migrations 001, 002 and 003 in order.
-   Migration 003 supplies the worker claim index used by the processing lease.
-   Real v2 additionally requires service004 then installed-library002/003 exactly
-   as described in the [atomic rollout](../how-to/atomic-email-rollout.md).
-   Optional synthetic recording uses installed-library004, a **different file**,
-   plus explicit retention and [maintenance](../how-to/synthetic-email-operations.md).
-   No entry point runs migrations for you. Never use the destructive integration fixture against this database.
+3. Back up the database and apply the [schema for the endpoints you need](#choose-the-schema).
 4. Create an API key, allowing the actual caller IP:
 
    ```bash
@@ -35,9 +29,9 @@ and the [2.1.0 target notes](../releases/2.1.0.md).
    ```
 
    Save the output in a secret store; it is shown once and the DB stores its hash.
-   v2 keys also need an operator-provisioned stable consumer binding. Key rotation
-   reuses the approved namespace; [provisioning/rotation](../how-to/atomic-email-rollout.md)
-   is explicit, not inferred from the key name/id/raw value.
+   Every key used for real v2 or synthetic needs an explicit
+   [consumer binding](../how-to/atomic-email-rollout.md#provision-a-consumer-binding)
+   before its first call. Key rotation reuses the approved namespace.
 5. Serve only `public/` through the web server and PHP. For a **local-only** server:
 
    ```bash
@@ -49,6 +43,41 @@ and the [2.1.0 target notes](../releases/2.1.0.md).
 6. Start the [email worker](../how-to/run-worker.md) when real jobs should be sent.
    Ingestion202 confirms persistence, not successful rendering or SMTP.
    Set an absolute logging path and the worker's working directory explicitly.
+
+### Choose the schema
+
+On a fresh service database, apply the service migrations in this order.
+
+1. `migrations/001_create_email_queue.sql`
+2. `migrations/002_create_api_keys.sql`
+3. `migrations/003_optimize_worker_poll_index.sql`, which supplies the worker claim index.
+
+An existing v1 service keeps these migrations. Apply each addition in the order
+shown, once, and skip files already applied.
+
+| Endpoints to enable | Additions after service 001–003 | Setup after migrations |
+| --- | --- | --- |
+| v1 only | None | Create an API key with the caller IP allowed. |
+| v1 and real v2 | Service binding, then receipt table, then queue receipt binding | Provision a consumer binding for each key used for real v2. |
+| Synthetic only, with v1 still available | Service binding, then synthetic table | Provision a consumer binding for each key used for synthetic. Set `SYNTHETIC_EMAIL_RETENTION_SECONDS` and schedule bounded cleanup. |
+| v1, real v2 and synthetic | Service binding, then receipt table, then queue receipt binding, then synthetic table | Provision bindings for keys used for either v2 operation. Set synthetic retention and schedule bounded cleanup. |
+
+The additions come from these exact files.
+
+| Addition | File |
+| --- | --- |
+| Service binding | `migrations/004_create_email_consumer_bindings.sql` |
+| Receipt table | `vendor/maatify/email-delivery/schema/mysql/002_email_enqueue_receipts.sql` |
+| Queue receipt binding | `vendor/maatify/email-delivery/schema/mysql/003_email_queue_receipt_binding.sql` |
+| Synthetic table | `vendor/maatify/email-delivery/schema/mysql/004_email_synthetic_requests.sql` |
+
+Use SQL directly from the installed package locked by Composer. Keep the service
+queue from service 001. Package migration 001 is for a standalone library queue.
+The standard service schema already has the claim index and uses unscoped
+workers, so it needs neither package 005 nor 006. No entry point applies SQL
+automatically. Keep destructive integration fixtures on a separate test database.
+See the [atomic rollout](../how-to/atomic-email-rollout.md) and
+[synthetic operations](../how-to/synthetic-email-operations.md).
 
 ## Choose the actual operation
 

@@ -209,7 +209,10 @@ Create the environment configuration file:
 cp .env.example .env
 ```
 
-Edit `.env` and configure the following variables.
+The tables below introduce common settings. Use the complete
+[configuration and CLI reference](docs/reference/configuration.md) for branding,
+database session timeout, processing lease, synthetic retention and other
+operator settings.
 
 ### Application
 
@@ -297,7 +300,7 @@ SMTP configuration used by the email delivery worker.
 | `MAIL_PASSWORD`     | SMTP password                   |
 | `MAIL_FROM_ADDRESS` | Default sender email            |
 | `MAIL_FROM_NAME`    | Sender display name             |
-| `MAIL_ENCRYPTION`   | Encryption type (`tls` / `ssl`) |
+| `MAIL_ENCRYPTION`   | `tls` for STARTTLS, `ssl` for implicit TLS, or empty/unset for an intentionally unencrypted relay. Other values prevent SMTP initialization. |
 | `MAIL_TIMEOUT`      | SMTP timeout (seconds)          |
 | `MAIL_DEBUG_LEVEL`  | SMTP debug level (0 = disabled) |
 
@@ -378,20 +381,19 @@ curl -X POST http://localhost:8080/api/v1/email/enqueue \
 
 ## Worker Usage
 
-Run the email worker:
+Run the email worker for a basic local setup.
 
 ```bash
 php scripts/email_worker.php --batch=50 --loop --sleep=5
 ```
 
-This worker should normally run under a **process manager** like Supervisor or systemd.
-It replaces a lost database connection before the next batch, and after repeated
-connection failures it exits with code `1` so the process manager restarts it.
-`php scripts/email_queue_status.php` reports queue stalls for your monitoring.
+Run production workers under [Supervisor](docs/how-to/run-worker.md#supervisor-configuration)
+or [systemd](docs/how-to/run-worker.md#systemd). The worker can reconnect before
+a claim and exits with code `1` after repeated connection failures.
 
-See the worker setup guide:
-
-[Run Worker Guide](docs/how-to/run-worker.md)
+`php scripts/email_queue_status.php` alone checks the queue. For heartbeat and
+recent outcome alerts, give each worker a persistent state file and pass all
+those paths to [the monitor](docs/how-to/run-worker.md#monitor-queue-stalls).
 
 ---
 
