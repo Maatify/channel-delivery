@@ -10,8 +10,8 @@ For an embedded PHP email engine, use [maatify/email-delivery](https://github.co
 The service requires PHP 8.4 or later, PDO MySQL, the extensions in
 `composer.json`, InnoDB, Redis for request counting and SMTP for real delivery.
 The source CI matrix includes PHP 8.4 and 8.5, MySQL 9.2 and MariaDB 11.4.
-Remote HTTP clients use their own runtime. See the [published 2.0.0 guide](../releases/2.0.0.md)
-and the [2.1.0 target notes](../releases/2.1.0.md).
+Remote HTTP clients use their own runtime. See the [2.1.0 release guide](../releases/2.1.0.md)
+and the [historical 2.0.0 release](../releases/2.0.0.md).
 
 ## First service setup
 
