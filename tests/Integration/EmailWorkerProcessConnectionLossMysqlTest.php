@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use Maatify\ChannelDelivery\Worker\EmailQueueStallMonitor;
+use Maatify\ChannelDelivery\Worker\EmailWorkerState;
+use Maatify\ChannelDelivery\Worker\EmailWorkerStateFile;
+use Psr\Log\NullLogger;
 use Tests\Support\AtomicHttpMysqlTestCase;
 
-/**
- * Black-box: the real DI-wired worker loop in its own process. The server closes
- * the worker's connection between batches (KILL, or its session idle timeout); a
- * message accepted afterwards must still be sent, the process must keep running,
- * and no PHP warning, notice or deprecation may reach its output.
- */
+/** Black-box recovery and monitoring tests for the DI-wired worker in a separate process. */
 final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTestCase
 {
     private string $directory = '';
@@ -82,6 +81,60 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
         self::assertCleanOutput();
     }
 
+    public function testUnrecordedSendRemainsVisibleAfterWorkerIsKilledMidBatch(): void
+    {
+        [$app] = $this->application();
+        $path = $this->processDirectory() . '/state.json';
+        $previousHeartbeat = time() - 2;
+        (new EmailWorkerStateFile($path, new NullLogger()))->write(new EmailWorkerState(1, $previousHeartbeat, 0, 0, $previousHeartbeat));
+        $monitor = new EmailQueueStallMonitor($this->pdo);
+        self::assertSame('ok', $monitor->report(600, 3, 600, [$path], time())['status']);
+
+        self::assertSame(202, $this->request($app, key: 'outcome-process-1')->getStatusCode());
+        self::assertSame(202, $this->request($app, key: 'outcome-process-2')->getStatusCode());
+        $this->pdo->exec("UPDATE cd_email_queue SET scheduled_at = '2000-01-01 00:00:00'");
+        $this->pdo->exec("CREATE TRIGGER fixture_reject_sent BEFORE UPDATE ON cd_email_queue FOR EACH ROW
+            BEGIN
+                IF OLD.id = 1 AND OLD.status = 'processing' AND NEW.status = 'sent' THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'fixture outcome failure';
+                END IF;
+            END");
+
+        $this->startWorker(stateFile: $path, holdSecondSend: true);
+        $this->waitFor(fn (): bool => str_contains($this->log(), 'Recording transport holding second send'));
+        self::assertStringContainsString('Email sent but status write failed', $this->log());
+        self::assertStringNotContainsString('Batch processed', $this->log());
+        self::assertStringNotContainsString('Worker batch completed with unrecorded outcomes', $this->log());
+        $this->assertCleanOutput();
+
+        self::assertNotNull($this->process);
+        self::assertTrue(proc_get_status($this->process)['running']);
+        self::assertTrue(proc_terminate($this->process, 9));
+        proc_close($this->process);
+        $this->process = null;
+
+        $report = $monitor->report(600, 3, 600, [$path], time());
+        self::assertSame(['outcome_write_failed'], $report['alerts'], 'The monitor must alert without a completed batch.');
+        $interrupted = EmailWorkerStateFile::read($path);
+        self::assertNotNull($interrupted);
+        self::assertSame($previousHeartbeat, $interrupted->updatedAt, 'A mid-batch event must not refresh heartbeat age.');
+        self::assertNotNull($interrupted->lastOutcomeWriteFailedAt);
+        self::assertSame('2', self::scalar($this->pdo, "SELECT COUNT(*) FROM cd_email_queue WHERE status = 'processing' AND attempts = 1"));
+
+        self::assertTrue(unlink($this->directory . '/worker.log'));
+        $this->startWorker(stateFile: $path);
+        self::assertNotNull($this->process);
+        $restartPid = proc_get_status($this->process)['pid'];
+        $this->waitFor(static fn (): bool => EmailWorkerStateFile::read($path)?->pid === $restartPid);
+        $restarted = EmailWorkerStateFile::read($path);
+        self::assertNotNull($restarted);
+        self::assertSame($interrupted->lastOutcomeWriteFailedAt, $restarted->lastOutcomeWriteFailedAt);
+        self::assertSame(['outcome_write_failed'], $monitor->report(600, 3, 600, [$path], time())['alerts']);
+        self::assertNotNull($restarted->lastBatchSucceededAt, 'The restarted worker completed an empty poll.');
+        self::assertStringNotContainsString('Recording transport invoked', $this->log());
+        $this->assertCleanOutput();
+    }
+
     private function assertCleanOutput(): void
     {
         foreach (['stdout', 'stderr'] as $stream) {
@@ -90,12 +143,23 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
     }
 
     /** @param array<string, string> $environment */
-    private function startWorker(array $environment = [], int $sleep = 1, int $delayFirstSend = 0): void
-    {
-        $this->directory = sys_get_temp_dir() . '/cd-worker-process-' . bin2hex(random_bytes(6));
-        self::assertTrue(mkdir($this->directory));
-        $spec = $this->directory . '/spec.json';
-        file_put_contents($spec, json_encode(['env' => array_merge($_ENV, $environment), 'log' => $this->directory . '/worker.log', 'batch' => 10, 'sleep' => $sleep, 'delay_first_send' => $delayFirstSend], JSON_THROW_ON_ERROR));
+    private function startWorker(
+        array $environment = [],
+        int $sleep = 1,
+        int $delayFirstSend = 0,
+        ?string $stateFile = null,
+        bool $holdSecondSend = false,
+    ): void {
+        $spec = $this->processDirectory() . '/spec.json';
+        file_put_contents($spec, json_encode([
+            'env' => array_merge($_ENV, $environment),
+            'log' => $this->directory . '/worker.log',
+            'batch' => 10,
+            'sleep' => $sleep,
+            'delay_first_send' => $delayFirstSend,
+            'state_file' => $stateFile,
+            'hold_second_send' => $holdSecondSend,
+        ], JSON_THROW_ON_ERROR));
         $process = proc_open(
             [PHP_BINARY, '-d', 'error_reporting=-1', '-d', 'display_errors=stderr', '-d', 'log_errors=0', dirname(__DIR__) . '/Support/email-worker-process.php', $spec],
             [0 => ['pipe', 'r'], 1 => ['file', $this->directory . '/stdout', 'w'], 2 => ['file', $this->directory . '/stderr', 'w']],
@@ -104,6 +168,30 @@ final class EmailWorkerProcessConnectionLossMysqlTest extends AtomicHttpMysqlTes
         self::assertIsResource($process);
         fclose($pipes[0]);
         $this->process = $process;
+    }
+
+    private function processDirectory(): string
+    {
+        if ($this->directory === '') {
+            $this->directory = sys_get_temp_dir() . '/cd-worker-process-' . bin2hex(random_bytes(6));
+            self::assertTrue(mkdir($this->directory, 0700));
+        }
+
+        return $this->directory;
+    }
+
+    /** @param \Closure(): bool $observed */
+    private function waitFor(\Closure $observed): void
+    {
+        $deadline = microtime(true) + 15.0;
+        do {
+            if ($observed()) {
+                return;
+            }
+            usleep(100000);
+        } while (microtime(true) < $deadline);
+
+        self::fail("Worker checkpoint was not reached.\n" . $this->log() . (string) file_get_contents($this->directory . '/stderr'));
     }
 
     private function waitForSent(int $expected, float $seconds, string $when): void

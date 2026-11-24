@@ -19,7 +19,10 @@ All notable changes to this project will be documented in this file.
 
 - Block worker startup or reconnect while historical pending rows have exhausted
   the attempt cap. Document operator settlement and rollback.
-- Alert on unrecorded outcome writes and processing leases exhausted at the cap.
+- Persist alerts for unrecorded outcome writes and exhausted processing leases
+  when detected, so they survive a worker interruption mid-batch.
+- Document how to settle stuck processing jobs while running the older worker
+  during rollback, preserving the attempt cap and receipt bindings.
 
 ### Added
 

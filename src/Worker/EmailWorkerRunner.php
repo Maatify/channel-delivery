@@ -82,9 +82,18 @@ final class EmailWorkerRunner
         }
         $limit = $loop ? $maxConnectionFailures : 1;
         $state = $stateFile === null ? null : new EmailWorkerStateFile($stateFile, $this->logger);
+        $previous = $stateFile === null ? null : EmailWorkerStateFile::read($stateFile);
+        $connectionFailures = 0;
+        $batchFailures = 0;
+        $lastSuccess = null;
+        $heartbeatAt = $previous?->updatedAt ?? time();
         $outcomes = new EmailWorkerOutcomeLogger(
             $this->logger,
-            $stateFile === null ? null : EmailWorkerStateFile::read($stateFile),
+            $previous,
+            $state === null ? null : function (EmailWorkerOutcomeLogger $events) use ($state, &$batchFailures, &$connectionFailures, &$lastSuccess, &$heartbeatAt): void {
+                // Publish the event before the engine can start another send in this batch.
+                $state->write($this->state($batchFailures, $connectionFailures, $lastSuccess, $events, $heartbeatAt));
+            },
         );
 
         $this->logger->info('Worker started', [
@@ -97,9 +106,6 @@ final class EmailWorkerRunner
         $pdo = null;
         $worker = null;
         $attemptedConnection = false;
-        $connectionFailures = 0;
-        $batchFailures = 0;
-        $lastSuccess = null;
 
         $connect = function () use (&$pdo, &$attemptedConnection, &$connectionFailures): PDO {
             // A failed replacement must not leave the previous session visible to the runner.
@@ -171,7 +177,8 @@ final class EmailWorkerRunner
                 }
             }
 
-            $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess, $outcomes));
+            $heartbeatAt = time();
+            $state?->write($this->state($batchFailures, $connectionFailures, $lastSuccess, $outcomes, $heartbeatAt));
             $this->pause($loop, $sleepSeconds);
         } while ($loop);
 
@@ -226,13 +233,18 @@ final class EmailWorkerRunner
         }
     }
 
-    private function state(int $batchFailures, int $connectionFailures, ?int $lastSuccess, EmailWorkerOutcomeLogger $outcomes): EmailWorkerState
-    {
+    private function state(
+        int $batchFailures,
+        int $connectionFailures,
+        ?int $lastSuccess,
+        EmailWorkerOutcomeLogger $outcomes,
+        ?int $heartbeatAt = null,
+    ): EmailWorkerState {
         $pid = getmypid();
 
         return new EmailWorkerState(
             $pid === false ? 0 : $pid,
-            time(),
+            $heartbeatAt ?? time(),
             $batchFailures,
             $connectionFailures,
             $lastSuccess,

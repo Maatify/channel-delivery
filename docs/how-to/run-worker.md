@@ -94,7 +94,7 @@ Create a configuration file at `/etc/supervisor/conf.d/channel-delivery-email.co
 [program:cd_email_worker]
 process_name=%(program_name)s_%(process_num)02d
 directory=/path/to/channel-delivery
-command=php /path/to/channel-delivery/scripts/email_worker.php --batch=50 --loop --sleep=5 --state-file=/path/to/channel-delivery/var/worker/email_worker_%(process_num)02d.json
+command=php /path/to/channel-delivery/scripts/email_worker.php --batch=50 --loop --sleep=5 --state-file=/var/lib/channel-delivery/worker/email_worker_%(process_num)02d.json
 autostart=true
 autorestart=true
 startsecs=0
@@ -107,6 +107,7 @@ stdout_logfile=/path/to/channel-delivery/var/log/email_worker.log
 Give each process its own `--state-file` in an existing local directory writable by
 the worker and readable by the monitor. Keep that directory outside the public
 document root and restrict writes to the worker account and deployment operators.
+Create it outside versioned release directories so a deployment uses the same paths.
 Create the directory for `stdout_logfile` before loading the Supervisor configuration.
 
 Keep `startsecs=0`. With Supervisor's default `startsecs=1`, a worker that exits within
@@ -144,7 +145,7 @@ StartLimitIntervalSec=0
 [Service]
 User=www-data
 WorkingDirectory=/path/to/channel-delivery
-ExecStart=/usr/bin/php scripts/email_worker.php --batch=50 --loop --sleep=5 --state-file=/path/to/channel-delivery/var/worker/email_worker.json
+ExecStart=/usr/bin/php scripts/email_worker.php --batch=50 --loop --sleep=5 --state-file=/var/lib/channel-delivery/worker/email_worker.json
 Restart=always
 RestartSec=5
 
@@ -161,7 +162,7 @@ is not a health signal, and `GET /health` only checks the API's own database
 connection. Check the queue itself with the read-only status script:
 
 ```bash
-php scripts/email_queue_status.php --state-file=/path/to/channel-delivery/var/worker/email_worker_00.json --state-file=/path/to/channel-delivery/var/worker/email_worker_01.json
+php scripts/email_queue_status.php --state-file=/var/lib/channel-delivery/worker/email_worker_00.json --state-file=/var/lib/channel-delivery/worker/email_worker_01.json
 ```
 
 It prints one JSON report and exits `0` within thresholds, `1` on an alert or when
@@ -201,10 +202,9 @@ the status is unavailable, `2` on bad arguments:
   a retry backoff are pending on purpose and do not count.
 - `consecutive_batch_failures` comes from each worker's state file: iterations in a
   row without a successful batch, connection failures included.
-- `updated_seconds_ago` is the heartbeat age: seconds since that worker last rewrote
-  its state file. The worker rewrites it once per loop iteration, so a worker that
-  stopped, hangs, or exited without being restarted leaves an old heartbeat behind,
-  even when its last counters looked healthy.
+- `updated_seconds_ago` is the age of the last iteration heartbeat. The worker
+  advances it when an iteration ends. A mid-batch outcome event keeps the
+  existing heartbeat time, so a stopped or stalled worker still goes stale.
 
 **Suggested alerts** (the script's defaults): the oldest due pending message is older
 than **600 seconds** (`--max-pending-age`), a worker has **3 or more** consecutive
@@ -231,9 +231,15 @@ The worker writes two event timestamps alongside the heartbeat.
   `last_error = 'processing_lease_expired'` for later review.
 
 Outcome and attempt-cap events alert for `--outcome-alert-window` seconds
-(default 600). An empty poll or restart using the same state file preserves
-the event timestamps. Size the window to cover the lease, the longest expected
-batch and the monitor interval. Retain the original logs for historical incidents.
+(default 600). The worker atomically replaces its state file as soon as it
+observes one of these events, before it handles another job. The write preserves
+the heartbeat time and does not mark the batch successful. An empty poll or
+restart using the same state file preserves the event timestamps. Keep each
+worker's file in a writable location that survives process restarts and
+deployments, and configure the monitor to read that same path. If writing the
+file fails, the worker logs `Worker state file not written` and still logs the
+original event. Monitor both logs and state-file health. Size the window to
+cover the lease, the longest expected batch and the monitor interval.
 Investigate the database write failure, then check queue state and the worker
 logs for a recorded outcome or a settled lease. Expiry of the alert window
 indicates elapsed time since the last observed event. It cannot establish

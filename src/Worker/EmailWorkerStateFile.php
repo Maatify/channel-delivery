@@ -7,7 +7,7 @@ namespace Maatify\ChannelDelivery\Worker;
 use Psr\Log\LoggerInterface;
 
 /**
- * JSON heartbeat a worker rewrites after every loop iteration. Each write replaces
+ * JSON state a worker rewrites after each iteration and at an outcome event. Each write replaces
  * the file atomically (temporary file + rename), so a reader never sees a partial
  * document. A write failure never stops the worker; it is logged once per outage.
  * Give each worker process its own path.

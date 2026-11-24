@@ -16,7 +16,7 @@ use PDO;
  *   passed), measured with the same clocks the worker uses. Rows scheduled for
  *   the future or waiting out a retry backoff are pending on purpose and not counted.
  * - each worker's consecutive batch failures and heartbeat age, read from its state
- *   file. The worker rewrites that file once per loop iteration, so a heartbeat older
+ *   file. The worker refreshes its heartbeat after each loop iteration, so a heartbeat older
  *   than one full iteration (the longest batch plus the sleep interval) means the
  *   worker stopped or hangs, even when its last counters looked healthy.
  *

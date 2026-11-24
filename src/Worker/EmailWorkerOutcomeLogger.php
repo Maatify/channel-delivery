@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Maatify\ChannelDelivery\Worker;
 
+use Closure;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
@@ -16,8 +17,12 @@ final class EmailWorkerOutcomeLogger extends AbstractLogger
     private ?int $lastOutcomeWriteFailedAt;
     private ?int $lastLeaseExhaustedAt;
 
-    public function __construct(private readonly LoggerInterface $logger, ?EmailWorkerState $previous)
-    {
+    /** @param (Closure(self): void)|null $persistEvent */
+    public function __construct(
+        private readonly LoggerInterface $logger,
+        ?EmailWorkerState $previous,
+        private readonly ?Closure $persistEvent = null,
+    ) {
         $this->lastOutcomeWriteFailedAt = $previous?->lastOutcomeWriteFailedAt;
         $this->lastLeaseExhaustedAt = $previous?->lastLeaseExhaustedAt;
     }
@@ -30,10 +35,11 @@ final class EmailWorkerOutcomeLogger extends AbstractLogger
             && in_array($message, ['Email sent but status write failed', 'Email job failure was not recorded'], true)) {
             ++$this->outcomeWriteFailures;
             $this->lastOutcomeWriteFailedAt = time();
-        }
-        if ($level === LogLevel::WARNING && $message === 'Email job permanently failed'
+            $this->persistEvent?->__invoke($this);
+        } elseif ($level === LogLevel::WARNING && $message === 'Email job permanently failed'
             && ($context['reason'] ?? null) === 'processing_lease_expired') {
             $this->lastLeaseExhaustedAt = time();
+            $this->persistEvent?->__invoke($this);
         }
 
         $this->logger->log($level, $message, $context);
