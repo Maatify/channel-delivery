@@ -83,7 +83,15 @@ final class AtomicEmailConcurrencyMysqlTest extends AtomicHttpMysqlTestCase
             $this->waitFile($name, 'before');
             $ids[] = (int) $this->waitFile($name, 'connection');
         }
-        $sql = "SELECT COUNT(DISTINCT w.REQUESTING_THREAD_ID) FROM performance_schema.data_lock_waits w JOIN performance_schema.threads t ON t.THREAD_ID=w.REQUESTING_THREAD_ID WHERE t.PROCESSLIST_ID IN (" . implode(',', $ids) . ')';
+        $connections = implode(',', $ids);
+        $isMariaDb = stripos(self::scalar($this->pdo, 'SELECT VERSION()'), 'mariadb') !== false;
+        $sql = $isMariaDb
+            ? "SELECT COUNT(DISTINCT t.trx_mysql_thread_id) FROM information_schema.INNODB_LOCK_WAITS w
+                JOIN information_schema.INNODB_TRX t ON t.trx_id = w.requesting_trx_id
+                WHERE t.trx_mysql_thread_id IN ($connections)"
+            : "SELECT COUNT(DISTINCT w.REQUESTING_THREAD_ID) FROM performance_schema.data_lock_waits w
+                JOIN performance_schema.threads t ON t.THREAD_ID = w.REQUESTING_THREAD_ID
+                WHERE t.PROCESSLIST_ID IN ($connections)";
         $deadline = microtime(true) + 10;
         do {
             $waiting = (int) self::scalar($this->pdo, $sql);

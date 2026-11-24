@@ -10,7 +10,7 @@ for vulnerabilities, not public payloads or credentials.
 
 Clone the repository for development. Production archives omit tests/CI development
 assets; creating a deployment from an archive is not the development workflow.
-Use PHP8.4 or8.5, the manifest extensions including PDO MySQL, Composer, MySQL9.2
+Use PHP8.4 or8.5, the manifest extensions including PDO MySQL, Composer, MySQL 9.2 or MariaDB 11.4
 and Redis7. Install the committed project lock; an intentional dependency update
 must include the reviewed lock diff. This project is not subject to a library
 no-lock policy.
@@ -21,12 +21,12 @@ composer validate --strict
 composer check-platform-reqs
 composer audit --format=plain
 composer test
-composer analyse
+composer analyse -- --memory-limit=512M
 ```
 
 Unit tests can run without integration DSN; integration tests then explicitly skip.
 That is **not** full qualification. For the required real HTTP/auth/DI/PDO/Redis
-suite, provision a disposable MySQL database whose actual name ends `_test` and set:
+suite, provision a disposable MySQL or MariaDB database whose actual name ends `_test` and set:
 
 ```text
 CHANNEL_IT_REQUIRED=1
@@ -34,16 +34,17 @@ CHANNEL_IT_DSN=mysql:host=127.0.0.1;port=3306;dbname=channel_delivery_test;chars
 CHANNEL_IT_USER=<isolated-fixture-user>
 CHANNEL_IT_PASS=<isolated-fixture-password>
 CHANNEL_IT_REDIS_HOST=127.0.0.1
+CHANNEL_IT_REDIS_PORT=6379
 ```
 
 The fixture resets its named service tables and applies service plus canonical
 installed-library SQL. It uses only fake SMTP transport, while actual app/auth/DI,
 transactions and worker processing run. The fixture DB user needs test-table DDL
-and MySQL performance_schema lock visibility for deterministic contention checks.
+and InnoDB lock-wait visibility for deterministic contention checks.
 No two destructive suites may share that fixture concurrently. Never point it at
 an application/production database, even if a name happens to end `_test`.
 
-CI runs the required fixture matrix on8.4/8.5 plus validation/audit/PHPStan/lint.
+CI runs the required fixture on PHP 8.4/8.5 with both database engines, plus validation, audit, PHPStan and lint.
 Run PHP lint on src/tests/config/scripts/docs/examples, and `for example in examples/*.sh; do bash -n "$example"; done`.
 The optional [timing smoke command](docs/how-to/synthetic-email-operations.md#qualification-and-limited-timing)
 is descriptive and kept out of normal CI; no latency-equality assertion is a product guarantee.

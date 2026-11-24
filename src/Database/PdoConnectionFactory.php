@@ -17,7 +17,7 @@ use Pdo\Mysql;
  * The factory never reconnects by itself. Replacing a connection is the caller's
  * decision and must never happen while that connection has an open transaction:
  * the statements before and after the swap would silently run in different
- * sessions. Only the worker replaces its own connection, and only between batches.
+ * sessions. Only the worker replaces its own connection, outside transactions.
  */
 final readonly class PdoConnectionFactory
 {
@@ -68,11 +68,21 @@ final readonly class PdoConnectionFactory
 
     public function create(): PDO
     {
+        return $this->open($this->sessionInitCommand());
+    }
+
+    public function createForWorker(): PDO
+    {
+        return $this->open($this->sessionInitCommand() . ', autocommit = 1');
+    }
+
+    private function open(string $initCommand): PDO
+    {
         return new PDO($this->dsn, $this->username, $this->password, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-            Mysql::ATTR_INIT_COMMAND     => $this->sessionInitCommand(),
+            PDO::ATTR_ERRMODE             => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE  => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES    => false,
+            Mysql::ATTR_INIT_COMMAND     => $initCommand,
         ]);
     }
 

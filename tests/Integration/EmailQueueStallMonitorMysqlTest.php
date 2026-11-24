@@ -63,10 +63,21 @@ final class EmailQueueStallMonitorMysqlTest extends AtomicHttpMysqlTestCase
         self::assertSame(3, $stalled['workers'][1]['consecutive_batch_failures'] ?? null);
         self::assertSame(1, $stalled['workers'][1]['consecutive_connection_failures'] ?? null);
         self::assertFalse($stalled['workers'][2]['available']);
-        self::assertSame(['max_pending_age_seconds' => 200, 'max_batch_failures' => 3, 'max_heartbeat_age_seconds' => 600], $stalled['thresholds']);
+        self::assertSame(['max_pending_age_seconds' => 200, 'max_batch_failures' => 3, 'max_heartbeat_age_seconds' => 600, 'outcome_alert_window_seconds' => 600], $stalled['thresholds']);
 
         self::assertSame(['consecutive_batch_failures'], $monitor->report(600, 3, 600, [$failing], time())['alerts']);
         self::assertSame('ok', $monitor->report(600, 4, 600, [$failing], time())['status'], 'Below the failure threshold.');
+    }
+
+    public function testQueueOnlyStatusAndPreUpgradeHeartbeatExposeOutcomeCoverage(): void
+    {
+        $monitor = new EmailQueueStallMonitor($this->session);
+        self::assertSame('not_configured', $monitor->report(600, 3, 600, [], time())['outcome_tracking']);
+        $path = $this->stateFile(new EmailWorkerState(42, time(), 0, 0, null));
+        $old = ['pid' => 42, 'updated_at' => time(), 'consecutive_batch_failures' => 0,
+            'consecutive_connection_failures' => 0, 'last_batch_succeeded_at' => time()];
+        self::assertNotFalse(file_put_contents($path, json_encode($old, JSON_THROW_ON_ERROR)));
+        self::assertSame(['outcome_tracking_unavailable'], $monitor->report(600, 3, 600, [$path], time())['alerts']);
     }
 
     public function testStatusScriptPrintsTheReportWithMonitoringExitCodes(): void
@@ -152,6 +163,21 @@ final class EmailQueueStallMonitorMysqlTest extends AtomicHttpMysqlTestCase
             [$code] = $this->script([$invalid]);
             self::assertSame(2, $code, $invalid);
         }
+    }
+
+    public function testStatusScriptHonoursTheOutcomeAlertWindow(): void
+    {
+        $path = $this->stateFile(new EmailWorkerState(206, time(), 0, 0, time(), time() - 60));
+        [$code, $output] = $this->script(['--outcome-alert-window=600', '--state-file=' . $path]);
+        self::assertSame(1, $code, $output);
+        $report = json_decode($output, true, 16, JSON_THROW_ON_ERROR);
+        self::assertIsArray($report);
+        self::assertSame(['outcome_write_failed'], $report['alerts']);
+
+        [$code] = $this->script(['--outcome-alert-window=30', '--state-file=' . $path]);
+        self::assertSame(0, $code);
+        [$code] = $this->script(['--outcome-alert-window=0']);
+        self::assertSame(2, $code);
     }
 
     private function seedQueue(?PDO $session = null): void

@@ -25,7 +25,8 @@ declare(strict_types=1);
 //   --state-file=PATH            Optional per-process JSON heartbeat read by
 //                                scripts/email_queue_status.php.
 //
-// Exit codes: 0 finished, 1 database connection unavailable, 2 bad arguments.
+// Exit codes: 0 finished, 1 database connection unavailable, 2 bad arguments,
+//             3 blocked on exhausted pending jobs awaiting operator settlement.
 //
 // Cron entry:
 //   * * * * * php /var/www/scripts/email_worker.php >> /var/log/email_worker.log 2>&1
@@ -33,36 +34,29 @@ declare(strict_types=1);
 
 use Maatify\ChannelDelivery\Worker\EmailWorkerRunner;
 
-require_once dirname(__DIR__) . '/vendor/autoload.php';
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit(1);
+}
 
-$opts = getopt('', ['batch:', 'loop', 'sleep:', 'max-connection-failures:', 'state-file:']);
-if ($opts === false) {
-    fwrite(STDERR, "Invalid worker options.\n");
+if (!isset($argv)) {
+    fwrite(STDERR, "CLI argument registration is required.\n");
     exit(2);
 }
 
-$batchSize = isset($opts['batch']) && is_string($opts['batch']) ? (int) $opts['batch'] : 50;
-$loopMode  = array_key_exists('loop', $opts);
-$sleepSecs = isset($opts['sleep']) && is_string($opts['sleep']) ? (int) $opts['sleep'] : 5;
-
-$maxConnectionFailures = EmailWorkerRunner::DEFAULT_MAX_CONNECTION_FAILURES;
-if (isset($opts['max-connection-failures'])) {
-    $value = $opts['max-connection-failures'];
-    if (!is_string($value) || preg_match('/\A[1-9][0-9]{0,3}\z/', $value) !== 1) {
-        fwrite(STDERR, "Expected --max-connection-failures=1..9999.\n");
-        exit(2);
-    }
-    $maxConnectionFailures = (int) $value;
+try {
+    $options = workerOptions(array_slice($argv, 1));
+    $batchSize = workerInteger($options['--batch'] ?? '50', '--batch', 1, PHP_INT_MAX);
+    $sleepSecs = workerInteger($options['--sleep'] ?? '5', '--sleep', 0, PHP_INT_MAX);
+    $maxConnectionFailures = isset($options['--max-connection-failures'])
+        ? workerInteger($options['--max-connection-failures'], '--max-connection-failures', 1, 9999)
+        : null;
+} catch (InvalidArgumentException $failure) {
+    fwrite(STDERR, $failure->getMessage() . "\n");
+    exit(2);
 }
 
-$stateFile = null;
-if (isset($opts['state-file'])) {
-    if (!is_string($opts['state-file']) || $opts['state-file'] === '') {
-        fwrite(STDERR, "Expected one non-empty --state-file=PATH.\n");
-        exit(2);
-    }
-    $stateFile = $opts['state-file'];
-}
+require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 $dotenv = Dotenv\Dotenv::createImmutable(dirname(__DIR__));
 $dotenv->load();
@@ -75,4 +69,61 @@ if (!$runner instanceof EmailWorkerRunner) {
     throw new RuntimeException('Invalid email worker binding.');
 }
 
-exit($runner->run($batchSize, $loopMode, $sleepSecs, $maxConnectionFailures, $stateFile));
+exit($runner->run(
+    $batchSize,
+    isset($options['--loop']),
+    $sleepSecs,
+    $maxConnectionFailures ?? EmailWorkerRunner::DEFAULT_MAX_CONNECTION_FAILURES,
+    $options['--state-file'] ?? null,
+));
+
+/**
+ * @param list<string> $args
+ * @return array<string, string>
+ */
+function workerOptions(array $args): array
+{
+    $options = [];
+    for ($i = 0, $count = count($args); $i < $count; ++$i) {
+        [$name, $value] = array_pad(explode('=', $args[$i], 2), 2, null);
+        if ($name === '--' && $value === null && $i + 1 === $count) {
+            break;
+        }
+        if (isset($options[$name]) || !in_array($name, ['--batch', '--loop', '--sleep', '--max-connection-failures', '--state-file'], true)) {
+            throw new InvalidArgumentException('Unknown or repeated worker option.');
+        }
+        if ($name === '--loop') {
+            if ($value !== null) {
+                throw new InvalidArgumentException('--loop does not take a value.');
+            }
+            $options[$name] = '';
+            continue;
+        }
+        if ($value === null) {
+            $value = $args[++$i] ?? '';
+            if (str_starts_with($value, '--')) {
+                throw new InvalidArgumentException('Expected a value for ' . $name . '.');
+            }
+        }
+        if ($value === '') {
+            throw new InvalidArgumentException('Expected a value for ' . $name . '.');
+        }
+        $options[$name] = $value;
+    }
+
+    return $options;
+}
+
+function workerInteger(string $value, string $option, int $min, int $max): int
+{
+    if (preg_match('/\A[0-9]+\z/', $value) === 1) {
+        $number = filter_var(ltrim($value, '0') ?: '0', FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => $min, 'max_range' => $max],
+        ]);
+        if ($number !== false) {
+            return $number;
+        }
+    }
+
+    throw new InvalidArgumentException(sprintf('Expected %s to be an integer from %d to %d.', $option, $min, $max));
+}

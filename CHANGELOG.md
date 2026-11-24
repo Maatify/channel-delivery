@@ -4,18 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.1.0]
+
 ### Fixed
 
-The long-running email worker no longer loops forever on a lost database connection (channel-delivery#12).
-Before each batch it checks its connection and rebuilds the connection and the worker from the connection factory.
-After `--max-connection-failures` (default 3) consecutive connection failures it exits with code 1 so the process manager restarts it.
-Other batch errors keep the previous log-and-continue behavior, and the log distinguishes a reconnect from an exit for restart.
+- Use the email-delivery 1.3.0 connection factory to recover before a claim and retry
+  safe status statements after a dropped connection, including after SMTP
+  ([#15](https://github.com/Maatify/channel-delivery/issues/15)).
+- Exit with code 1 after consecutive database connection failures so the process
+  manager can restart the worker ([#12](https://github.com/Maatify/channel-delivery/issues/12)).
+- Reject invalid worker arguments and unsupported SMTP encryption values at startup.
+- Write the worker heartbeat through an exclusive temporary file and bound status
+  reads. Document lease sizing and rollback with the previous release's cache layout.
+
+- Block worker startup or reconnect while historical pending rows have exhausted
+  the attempt cap. Document operator settlement and rollback.
+- Persist alerts for unrecorded outcome writes and exhausted processing leases
+  when detected, so they survive a worker interruption mid-batch.
+- Document how to settle stuck processing jobs while running the older worker
+  during rollback, preserving the attempt cap and receipt bindings.
 
 ### Added
 
-`DB_SESSION_WAIT_TIMEOUT`, applied as the session `wait_timeout` on every new shared and worker connection (default 28800).
-Read-only `scripts/email_queue_status.php` with the age of the oldest due pending message, each worker's consecutive batch failures and heartbeat freshness (optional `--state-file` heartbeat, stale after `--max-heartbeat-age`) and suggested alert thresholds.
-ADR003, accepted by the owner; worker guide with exit codes, Supervisor and systemd examples.
+- Recover expired processing leases automatically. The lease defaults to 300 seconds
+  and uses the service queue's existing TIMESTAMP column and claim index.
+- Apply the service-owned `DB_SESSION_WAIT_TIMEOUT` to worker and shared sessions.
+- Add a read-only queue-stall command and optional per-worker heartbeats.
+
+- Support optional Arabic and English brand names in Twig and provide a CLI to
+  refresh the release's compiled Twig and DI caches during deployment.
+
+### Removed
+
+- Retire the standalone stuck-job reset command. Disable its schedule during the
+  [worker upgrade](docs/upgrade/2.1.0.md).
 
 ## [2.0.0] - 2026-11-07
 

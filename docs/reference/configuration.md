@@ -13,17 +13,17 @@ populated process environment. Keep secrets out of source and the web document r
 | APP_ENV |`production` enables compiled DI cache at var/cache/di; use development locally |
 | APP_DEBUG |PHP boolean validation; false/0/off/no hide response exception details; server logging stays enabled |
 | APP_NAME / SUPPORT_EMAIL |Template globals, default App / empty; configure your own branding |
+| APP_BRAND_NAME_AR / APP_BRAND_NAME_EN | Optional Twig globals for the Arabic and English brand names. Both default to APP_NAME. |
 | DB_HOST / DB_PORT / DB_DATABASE |MySQL DSN, defaults127.0.0.1 /3306 /channel_delivery |
 | DB_USERNAME / DB_PASSWORD |Required database credentials |
 | DB_SESSION_WAIT_TIMEOUT |Session `wait_timeout` seconds applied on every new shared/worker connection (driver init command); empty uses 28800, MySQL's compiled default; integer 1..31536000, anything else fails the connection setup |
+| EMAIL_PROCESSING_LEASE_SECONDS | Worker lease duration, integer 1..31536000. Empty uses 300. Size for the longest expected batch plus a margin. [Lease sizing](../how-to/run-worker.md#processing-lease) Invalid values fail worker initialization. |
 | CRYPTO_ACTIVE_KEY_ID / CRYPTO_KEYS |Required JSON registry; each key material string must contain exactly32 raw bytes; no automatic hex/base64 decoding |
 
-The shared `PDO` (one per HTTP request or CLI command) and the worker's connection
-come from one factory, so both get the session settings. The factory never reconnects
-by itself, and the shared connection is never swapped: replacing a connection inside
-an open transaction would silently split that transaction across two sessions. Only
-the worker replaces its own connection, between batches. Set the timeout well above
-the worker's longest idle gap (its `--sleep` interval and the slowest single SMTP send).
+Shared HTTP/CLI sessions and dedicated worker sessions use the service connection
+factory. Every replacement worker session enables autocommit. The email engine
+reconnects before a claim or around safe autocommit statements. Set the timeout
+above the longest expected idle gap to limit reconnects.
 
 Keep historical read keys for retained receipts and queued jobs. Cryptographic
 contexts and binding identity must not change across retries. v2/synthetic operations
@@ -37,8 +37,8 @@ retain legacy timing for unbound rows.
 | --- | --- |
 | MAIL_HOST / MAIL_PORT / MAIL_USERNAME / MAIL_PASSWORD |Required when constructing real SMTP transport |
 | MAIL_FROM_ADDRESS / MAIL_FROM_NAME |Required real transport sender identity |
-| MAIL_ENCRYPTION |Configured transport encryption mode; configure to match provider |
-| MAIL_TIMEOUT |Transport timeout seconds; default10 |
+| MAIL_ENCRYPTION | `tls` for STARTTLS, `ssl` for implicit TLS, or empty/unset for an intentionally unencrypted relay. Other values reject SMTP initialization. |
+| MAIL_TIMEOUT | SMTP connection and stream timeout in seconds. Default 10. Use observed batch times for the lease and heartbeat. |
 | MAIL_DEBUG_LEVEL |SMTP diagnostic level; default0. `MAIL_DEBUG` is not read by the DI definition |
 | LOG_PATH |Logger output base path; configure an absolute, writable, nonpublic directory |
 | LOG_RETENTION_DAYS |Read by the logger library's LogCleaner; this service does not schedule that cleanup |
@@ -80,8 +80,9 @@ synthetic004 schema is separate from service004 consumer bindings.
 | CLI | Contract |
 | --- | --- |
 | `php scripts/create_api_key.php --name=example-client --ips=127.0.0.1` |Creates a hashed key and prints raw key once; `.env` and API-key table required |
-| `php scripts/email_worker.php --batch=50` |One batch; `--loop --sleep=5` enables repeated polling; `--max-connection-failures=3` (1..9999) consecutive connection failures before a loop exits for restart; optional `--state-file=PATH` heartbeat. Exit 0 finished, 1 database connection unavailable, 2 bad arguments |
-| `php scripts/email_queue_status.php` |Read-only stall check: oldest due pending age and each worker's consecutive batch failures and heartbeat age as JSON. `--max-pending-age=600`, `--max-batch-failures=3`, `--max-heartbeat-age=600` (above one full worker iteration: longest batch plus `--sleep`), repeatable `--state-file=PATH`. 0 within thresholds, 1 alert or status unavailable, 2 bad arguments |
+| `php scripts/email_worker.php --batch=50` |One batch; `--loop --sleep=5` enables repeated polling; `--max-connection-failures=3` (1..9999) consecutive connection failures before a loop exits for restart; optional `--state-file=PATH` heartbeat. Exit 0 if the run finishes, 1 for an unavailable database connection, 2 for bad arguments, 3 for an exhausted-pending upgrade block. See the [worker guide](../how-to/run-worker.md#cli-command) for batch errors |
+| `php scripts/email_queue_status.php` |Read-only queue and worker report in JSON. Checks due age, exhausted pending jobs, heartbeat and recent outcome failures. `--max-pending-age=600`, `--max-batch-failures=3`, `--max-heartbeat-age=600` (above one full worker iteration: longest batch plus `--sleep`), `--outcome-alert-window=600`, repeatable `--state-file=PATH`. Supply all worker files for outcome tracking. 0 within thresholds, 1 alert or status unavailable, 2 bad arguments |
+| `php scripts/deploy_clear_cache.php` | Clears the two compiled caches for this release. Exit 0 on success or absent caches, 1 on failure. |
 | `php scripts/purge_synthetic_email.php --limit=100` |Trusted global cleanup of at most1..1000 expired inert rows;0 success,1 unavailable/unknown,2 bad arguments |
 | `php scripts/purge_synthetic_email.php --help` |Help without loading environment or DB |
 
@@ -90,3 +91,14 @@ Use the [worker guide](../how-to/run-worker.md), [atomic rollout](../how-to/atom
 and [synthetic operations](../how-to/synthetic-email-operations.md). The diagnostic
 `scripts/test_enqueue.php` sends a real v1 request when explicitly supplied a test
 service and key; it does not provide atomic retry or a no-send mode.
+
+## Compiled caches
+
+Twig writes its compiled templates under `var/cache/twig` in the release directory.
+In production, PHP-DI writes its compiled container under `var/cache/di`.
+With the affected processes stopped, run `php scripts/deploy_clear_cache.php`
+from the release that will start after template or container changes. For rollback
+to a release without this command, start from a clean release directory with empty
+caches. The cache paths and their parents within the release must be
+real directories. The command removes links inside a cache as entries and leaves
+their targets in place. Treat a non-zero exit as a failed cache clear.

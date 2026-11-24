@@ -8,7 +8,7 @@ of implementation validation.
 ## Rollout
 
 1. Back up the database; install the committed Composer lock on PHP8.4 or8.5.
-   Verify installed maatify/email-delivery is1.2.0 or a separately reviewed
+   Verify installed maatify/email-delivery is 1.3.0 or a separately reviewed
    compatible release; SQL comes from that installed version.
 2. Existing installations keep service migrations001–003. Fresh installations
    apply them first in numeric order. Then apply, in this order:
@@ -33,7 +33,9 @@ of implementation validation.
    backfill. Keys intentionally sharing a namespace have access to the same
    receipts, so approve that security boundary explicitly. Do not rebind an
    existing key to another consumer; use a new key instead.
-4. Test v1 plus v2 accept/replay/lookup with a dedicated test intent. Deploy
+4. Refresh the release's compiled caches before restarting affected processes.
+   Follow the [cache procedure](../reference/configuration.md#compiled-caches).
+5. Test v1 plus v2 accept/replay/lookup with a dedicated test intent. Deploy
    v2-ready callers only after schemas and bindings are ready. The worker consumes
    both legacy and receipt-bound queue jobs without a mail-policy change.
 
@@ -80,5 +82,5 @@ an explicit fixture, but CI sets `CHANNEL_IT_REQUIRED=1`, explicit MySQL DSN to
 `channel_delivery_test`, fixture credentials and `CHANNEL_IT_REDIS_HOST`.
 The fixture resets only service test tables, loads canonical installed SQL and
 uses actual Slim/auth/DI/PDO/Redis; SMTP alone is replaced with a recording port.
-Concurrency uses separate PHP processes and MySQL performance_schema lock waits,
+Concurrency uses separate PHP processes and the engine's InnoDB lock-wait metadata,
 so the isolated fixture DB user needs permission to inspect those test locks.

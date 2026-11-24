@@ -7,11 +7,11 @@ For an embedded PHP email engine, use [maatify/email-delivery](https://github.co
 
 ## Requirements and release identity
 
-The published project release **2.0.0** requires PHP8.4+, PDO MySQL, the extensions
-in composer.json, MySQL/InnoDB, Redis for the request counter and SMTP for real delivery.
-CI exercises PHP8.4/8.5 and MySQL9.2. Remote HTTP clients are not required to use the service's PHP runtime. The [release guide](../releases/2.0.0.md) records
-published-source and qualification facts. Use the exact-version install command
-in README to select2.0.0; an unversioned create-project follows the current published channel.
+The service requires PHP 8.4 or later, PDO MySQL, the extensions in
+`composer.json`, InnoDB, Redis for request counting and SMTP for real delivery.
+The source CI matrix includes PHP 8.4 and 8.5, MySQL 9.2 and MariaDB 11.4.
+Remote HTTP clients use their own runtime. See the [published 2.0.0 guide](../releases/2.0.0.md)
+and the [2.1.0 target notes](../releases/2.1.0.md).
 
 ## First service setup
 
@@ -21,7 +21,8 @@ in README to select2.0.0; an unversioned create-project follows the current publ
    SMTP settings and direct/proxy IP handling using the [configuration reference](../reference/configuration.md).
    HTTP, worker and key-creation entry points require the `.env` file; do not assume
    process-only configuration replaces that file. Keep `APP_DEBUG=false` in deployed environments.
-3. On a fresh, backed-up database apply service migrations001,002,003 in order.
+3. On a fresh, backed-up database apply service migrations 001, 002 and 003 in order.
+   Migration 003 supplies the worker claim index used by the processing lease.
    Real v2 additionally requires service004 then installed-library002/003 exactly
    as described in the [atomic rollout](../how-to/atomic-email-rollout.md).
    Optional synthetic recording uses installed-library004, a **different file**,
@@ -88,6 +89,6 @@ operation it selected. No consumer/account flow is changed by installing this se
 ## Development, upgrades and archive layout
 
 Use a source clone for [development/tests](../../CONTRIBUTING.md); production archives
-omit test/CI tooling excluded by .gitattributes. [Upgrade2.0.0](../upgrade/2.0.0.md)
+omit test/CI tooling excluded by .gitattributes. [Upgrade to 2.1.0](../upgrade/2.1.0.md)
 covers PHP, migration order, retained receipts/keys and cache handling. Historical
 short guides remain compatibility navigation, not competing sources of contract truth.

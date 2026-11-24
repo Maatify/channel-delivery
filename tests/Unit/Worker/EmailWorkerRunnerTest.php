@@ -16,7 +16,6 @@ use PDO;
 use PDOException;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\NullLogger;
 use Tests\Support\RecordingLogger;
 use Tests\Support\ScriptedConnection;
 use Tests\Support\StopLoop;
@@ -62,7 +61,7 @@ final class EmailWorkerRunnerTest extends TestCase
         self::assertSame(1, $first->batches, 'The dead connection must not run another batch.');
         self::assertSame(1, $second->batches, 'The next batch runs on the replacement connection.');
         self::assertSame(2, $this->connectAttempts);
-        self::assertSame(['Worker database connection lost; reconnecting'], $this->logger->messages('warning'));
+        self::assertSame(['Email queue connection was closed by the server; reconnecting before the claim'], $this->logger->messages('warning'));
         self::assertSame(['Worker started', 'Batch processed', 'Worker database connection re-established', 'Batch processed'], $this->logger->messages('info'));
         self::assertSame([], $this->logger->messages('error'));
         self::assertSame([], $this->logger->messages('critical'));
@@ -77,7 +76,7 @@ final class EmailWorkerRunnerTest extends TestCase
         self::assertSame(EmailWorkerRunner::EXIT_CONNECTION_UNAVAILABLE, $code);
         self::assertSame(3, $this->connectAttempts);
         self::assertSame(2, $this->sleeps, 'It pauses between attempts and exits right after the last one.');
-        self::assertSame(['Worker database connection failed', 'Worker database connection failed'], $this->logger->messages('warning'));
+        self::assertSame(2, $this->logger->count('Worker database connection failed'));
         self::assertSame(['Worker exiting for restart: database connection unavailable'], $this->logger->messages('critical'));
         self::assertSame(['Worker started'], $this->logger->messages('info'), 'No reconnect, batch or finish record before the exit.');
         $exit = $this->record('Worker exiting for restart: database connection unavailable');
@@ -143,7 +142,6 @@ final class EmailWorkerRunnerTest extends TestCase
         self::assertSame(5, $connection->batches);
         self::assertSame(5, $this->logger->count('Worker batch failed'));
         self::assertSame([], $this->logger->messages('critical'));
-        self::assertSame(0, $this->logger->count('Worker database connection lost; reconnecting'));
     }
 
     public function testBatchFailureThatLosesTheConnectionCountsTowardsRestart(): void
@@ -151,7 +149,7 @@ final class EmailWorkerRunnerTest extends TestCase
         $scripts = [];
         for ($i = 0; $i < 4; ++$i) {
             $script = new ScriptedConnection();
-            $script->batchFailure = new PDOException('SQLSTATE[HY000]: General error: 2006 MySQL server has gone away');
+            $script->batchFailure = self::disconnected();
             $script->aliveAfterBatchFailure = false;
             $scripts[] = $script;
         }
@@ -291,10 +289,11 @@ final class EmailWorkerRunnerTest extends TestCase
         $first = new ScriptedConnection();
         $runner = $this->runner([$first, new ScriptedConnection()], function (int $sleeps) use ($first, $warning): void {
             if ($sleeps === 1) {
-                $first->alive = false;
+                $first->batchFailure = self::disconnected();
+                $first->aliveAfterBatchFailure = false;
                 $first->probeWarning = $warning;
             }
-            if ($sleeps === 2) {
+            if ($sleeps === 3) {
                 throw new StopLoop();
             }
         });
@@ -364,20 +363,24 @@ final class EmailWorkerRunnerTest extends TestCase
         $empty->method('fetchAll')->willReturn([]);
 
         $pdo = $this->createMock(PDO::class);
+        $pdo->method('getAttribute')->willReturnMap([
+            [PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION],
+            [PDO::ATTR_DRIVER_NAME, 'fixture'],
+        ]);
         $pdo->method('query')->willReturnCallback(static function (string $sql) use ($script, $probe, $metadata): PDOStatement {
             if ($sql === 'SELECT 1') {
                 ++$script->probes;
-                if ($script->probeWarning !== null) {
+                if (!$script->alive && $script->probeWarning !== null) {
                     trigger_error($script->probeWarning, E_USER_WARNING);
                 }
                 if (!$script->alive) {
-                    throw new PDOException('SQLSTATE[HY000]: General error: 2006 MySQL server has gone away');
+                    throw self::disconnected();
                 }
 
                 return $probe;
             }
             if (!$script->alive) {
-                throw new PDOException('SQLSTATE[HY000]: General error: 2006 MySQL server has gone away');
+                throw self::disconnected();
             }
             if ($script->batchFailure !== null) {
                 $script->alive = $script->aliveAfterBatchFailure;
@@ -399,7 +402,7 @@ final class EmailWorkerRunnerTest extends TestCase
         return $pdo;
     }
 
-    /** @return Closure(PDO): EmailQueueWorker */
+    /** @return Closure(Closure(): PDO, \Psr\Log\LoggerInterface): EmailQueueWorker */
     private function workerFactory(): Closure
     {
         $crypto = (new \ReflectionClass(CryptoProvider::class))->newInstanceWithoutConstructor();
@@ -407,7 +410,15 @@ final class EmailWorkerRunnerTest extends TestCase
         $transport = $this->createMock(EmailTransportInterface::class);
         $contexts = $this->createMock(CryptoContextProviderInterface::class);
 
-        return static fn (PDO $pdo): EmailQueueWorker => new EmailQueueWorker($pdo, $crypto, $renderer, $transport, $contexts, new NullLogger());
+        return static fn (Closure $connect, \Psr\Log\LoggerInterface $logger): EmailQueueWorker => new EmailQueueWorker($connect, $crypto, $renderer, $transport, $contexts, $logger);
+    }
+
+    private static function disconnected(): PDOException
+    {
+        $failure = new PDOException('SQLSTATE[HY000]: General error: 2006 MySQL server has gone away');
+        $failure->errorInfo = ['HY000', 2006, 'MySQL server has gone away'];
+
+        return $failure;
     }
 
     /** @return array<mixed> */

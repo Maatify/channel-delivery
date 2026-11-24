@@ -1,6 +1,6 @@
 # Atomic email acceptance (v2)
 
-This additive API uses `maatify/email-delivery` 1.2.0. Existing
+This additive API uses `maatify/email-delivery` 1.3.0. Existing
 `POST /api/v1/email/enqueue` keeps its per-call insert and `{"status":"queued"}`
 response; an Idempotency-Key on v1 does not deduplicate anything.
 
