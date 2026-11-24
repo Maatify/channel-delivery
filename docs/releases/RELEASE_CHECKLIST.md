@@ -19,8 +19,10 @@ Record preparation, CI, publication and deployment as separate stages.
 - Exercise the actual consumer shell/PHP examples on an isolated test service;
   no live SMTP or production data. Remove complete credential values from examples.
 - Review community/security policy and preserve approved1.x support; retain the existing 2.x security commitment. Confirm additional channels remain planned.
-- Keep project lock; review metadata/platform changes and do not change dependency
-  versions outside the email-delivery adoption.
+- Keep the reviewed project lock. Review metadata and platform changes. The
+  dependency scope for 2.1.0 covers email-delivery adoption and the approved
+  Twig 3.31.1 security update documented in [#19](https://github.com/Maatify/channel-delivery/issues/19)
+  and [#20](https://github.com/Maatify/channel-delivery/pull/20).
 
 ## Qualify one clean final main SHA
 

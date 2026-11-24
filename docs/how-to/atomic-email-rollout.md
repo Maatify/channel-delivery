@@ -20,24 +20,32 @@ of implementation validation.
    vendor003 refers to the library's newer standalone001, not service001.
    Review vendor docs/reference/idempotency.md and migration preconditions. Apply each once;
    queue ALTER003 is not an idempotent migration runner. No SQL is applied on boot.
-3. Provision a stable namespace for each authenticated consumer. Use approved
-   non-secret ASCII `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}` and explicit existing API-key
-   ids. Execute parameterized SQL through an operator PDO tool, for example:
-
-   ```php
-   $insert = $pdo->prepare('INSERT INTO cd_email_consumer_bindings (api_key_id, consumer_namespace) VALUES (:id, :namespace)');
-   $insert->execute(['id' => $approvedApiKeyId, 'namespace' => $stableConsumerNamespace]);
-   ```
-
-   Do not derive namespace from a secret, row id or key name. Do not automatically
-   backfill. Keys intentionally sharing a namespace have access to the same
-   receipts, so approve that security boundary explicitly. Do not rebind an
-   existing key to another consumer; use a new key instead.
+3. [Provision a consumer binding](#provision-a-consumer-binding) for each key used for real v2.
 4. Refresh the release's compiled caches before restarting affected processes.
    Follow the [cache procedure](../reference/configuration.md#compiled-caches).
-5. Test v1 plus v2 accept/replay/lookup with a dedicated test intent. Deploy
+5. Verify the [database session preconditions](../reference/configuration.md#database-sessions),
+   including inherited `autocommit=1` on fresh v2 connections. Test v1 plus v2
+   accept/replay/lookup with a dedicated test intent. Deploy
    v2-ready callers only after schemas and bindings are ready. The worker consumes
    both legacy and receipt-bound queue jobs without a mail-policy change.
+
+### Provision a consumer binding
+
+Apply service `migrations/004_create_email_consumer_bindings.sql` once, after
+the service API-key migration. Both real v2 and synthetic use this table. For
+each approved existing API-key ID, choose a stable non-secret ASCII namespace
+matching `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. Use an operator PDO tool with the
+approved inputs bound as parameters.
+
+```php
+$insert = $pdo->prepare('INSERT INTO cd_email_consumer_bindings (api_key_id, consumer_namespace) VALUES (:id, :namespace)');
+$insert->execute(['id' => $approvedApiKeyId, 'namespace' => $stableConsumerNamespace]);
+```
+
+Assign the namespace independently of the raw key, row ID and key name. When
+real v2 is enabled, keys sharing a namespace have access to the same receipts,
+so approve that boundary explicitly. For a different consumer, provision a
+new key and binding. See [rotation and retention](#rotation-and-retention).
 
 ## Rotation and retention
 
@@ -55,11 +63,10 @@ unchanged, including in Athar. Preserve historical crypto key material required
 by library fingerprints across rotation. Follow the installed library's key
 rotation and receipt retention contract; do not silently regenerate keys.
 
-Each v2 write/lookup creates a new nonpersistent exception-mode PDO and sets its
-session timezone to `+00:00`. Legacy/shared PDO timezone is not changed. The library worker detects the
-receipt binding and uses UTC due/retry/sent clocks for keyed jobs while retaining
-legacy timing for unbound rows; the integration test exercises a non-UTC shared
-session.
+Each v2 enqueue or lookup opens a dedicated connection and sets its time zone to
+`+00:00`. An inherited autocommit value of 0 causes HTTP 503 before the library
+starts a transaction. The worker uses UTC due, retry and sent clocks for keyed
+jobs and retains legacy timing for unbound rows.
 
 ## Recovery / rollback
 

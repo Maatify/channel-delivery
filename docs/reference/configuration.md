@@ -13,23 +13,71 @@ populated process environment. Keep secrets out of source and the web document r
 | APP_ENV |`production` enables compiled DI cache at var/cache/di; use development locally |
 | APP_DEBUG |PHP boolean validation; false/0/off/no hide response exception details; server logging stays enabled |
 | APP_NAME / SUPPORT_EMAIL |Template globals, default App / empty; configure your own branding |
-| APP_BRAND_NAME_AR / APP_BRAND_NAME_EN | Optional Twig globals for the Arabic and English brand names. Both default to APP_NAME. |
+| APP_BRAND_NAME_AR / APP_BRAND_NAME_EN | Optional Twig globals for the Arabic and English brand names. Each uses APP_NAME when unset. Applies to templates that reference the corresponding global. |
 | DB_HOST / DB_PORT / DB_DATABASE |MySQL DSN, defaults127.0.0.1 /3306 /channel_delivery |
 | DB_USERNAME / DB_PASSWORD |Required database credentials |
 | DB_SESSION_WAIT_TIMEOUT |Session `wait_timeout` seconds applied on every new shared/worker connection (driver init command); empty uses 28800, MySQL's compiled default; integer 1..31536000, anything else fails the connection setup |
 | EMAIL_PROCESSING_LEASE_SECONDS | Worker lease duration, integer 1..31536000. Empty uses 300. Size for the longest expected batch plus a margin. [Lease sizing](../how-to/run-worker.md#processing-lease) Invalid values fail worker initialization. |
-| CRYPTO_ACTIVE_KEY_ID / CRYPTO_KEYS |Required JSON registry; each key material string must contain exactly32 raw bytes; no automatic hex/base64 decoding |
+| CRYPTO_ACTIVE_KEY_ID / CRYPTO_KEYS | Required active key ID and JSON registry. Each key string must contain exactly 32 raw bytes. See [encryption keys](#encryption-keys). |
 
-Shared HTTP/CLI sessions and dedicated worker sessions use the service connection
-factory. Every replacement worker session enables autocommit. The email engine
-reconnects before a claim or around safe autocommit statements. Set the timeout
-above the longest expected idle gap to limit reconnects.
+### Database sessions
 
-Keep historical read keys for retained receipts and queued jobs. Cryptographic
-contexts and binding identity must not change across retries. v2/synthetic operations
-own fresh exception-mode, autocommit UTC PDO sessions; the legacy/shared PDO clock
-is not changed. Workers use UTC due/retry/sent clocks for receipt-bound jobs and
-retain legacy timing for unbound rows.
+| Connection | Autocommit | Session time zone | Session wait timeout |
+| --- | --- | --- | --- |
+| Shared HTTP/CLI, including legacy v1 | Inherits the database default | Inherits the database default | Sets `DB_SESSION_WAIT_TIMEOUT` |
+| Dedicated worker, including replacement connections | Sets `autocommit = 1` | Inherits the database default | Sets `DB_SESSION_WAIT_TIMEOUT` |
+| Real v2 enqueue/lookup and synthetic recording/cleanup | Inherits the database default | Sets `time_zone = '+00:00'` | Inherits the database default |
+
+Configure new connections for the service database account to inherit
+`@@SESSION.autocommit = 1`. Each real v2 and synthetic operation opens a fresh
+exception-mode PDO. The installed library checks that the connection is idle,
+in exception mode, and has autocommit enabled and an explicit UTC session
+(`+00:00` or `UTC`) before starting its own transaction. Verify the settings on
+connections opened by the service and smoke-test the optional paths before
+enabling callers.
+
+```sql
+SELECT @@SESSION.autocommit AS autocommit, @@SESSION.time_zone AS time_zone;
+```
+
+If a connection fails these checks, the library rejects the operation before
+starting a transaction. The real v2 handlers surface an unavailable response
+(HTTP 503 `enqueue_unavailable`), and the synthetic handler returns HTTP 503
+`recording_unavailable`. The synthetic purge CLI exits with code 1 on
+unavailability. Follow the relevant recovery contract for any 503, which can
+also arise from other failures.
+
+The email engine reconnects before a claim or around safe autocommit statements.
+Set the worker timeout above the longest expected idle gap to limit reconnects.
+Workers use UTC due, retry and sent clocks for receipt-bound jobs and retain
+legacy timing for unbound rows.
+
+### Encryption keys
+
+For a fresh installation, generate the registry line in a new private file
+outside the repository and web root. The command uses 24 random bytes to produce
+32 Base64 characters safe for JSON and Dotenv. The service uses those 32 ASCII
+bytes as key material directly. It performs no Base64 decoding.
+
+```bash
+(
+  umask 077
+  php -r '
+    $keys = json_encode([["id" => "v1", "key" => base64_encode(random_bytes(24))]], JSON_THROW_ON_ERROR);
+    printf("CRYPTO_KEYS=%s%s%s\n", chr(39), $keys, chr(39));
+  ' > /path/to/new-private-file
+)
+```
+
+Replace the empty `CRYPTO_KEYS` line in the private `.env` using your secret
+management tooling and set `CRYPTO_ACTIVE_KEY_ID` to the matching ID (`v1` above).
+For rotation, add a new unique ID and make it active. Keep previous registry
+entries for as long as their keys are needed by retained ciphertext, synthetic
+records and receipt fingerprint verification. A receipt can remain replayable
+after its queue job has been deleted. Keep the keys needed for that entire
+replay period and for synthetic records until their retention and cleanup
+obligations have been met. Keep cryptographic contexts and binding identity
+stable across retries. Keep key material out of source, logs and public examples.
 
 ## SMTP, worker and logging
 
@@ -72,8 +120,9 @@ direct connections. Match your actual proxy chain and never whitelist arbitrary 
 SYNTHETIC_EMAIL_RETENTION_SECONDS must be an explicit integer1..2147483647 before
 recording/maintenance can operate; no business retention default is chosen.
 Missing/invalid config disables that optional path, not real email. Expired rows
-remain until trusted cleanup commits; monitor backlog and capacity. The library's
-synthetic004 schema is separate from service004 consumer bindings.
+remain until trusted cleanup commits; monitor backlog and capacity. Configure
+both service 004 consumer bindings and the installed package's synthetic table.
+See the [synthetic-only setup](../how-to/synthetic-email-operations.md).
 
 ## Commands
 

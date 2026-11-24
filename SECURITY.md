@@ -5,23 +5,24 @@
 
 ## Supported versions
 
-Current support policy after publication of2.0.0 on2026-11-07:
+The current support policy follows publication of 2.0.0 on 2026-11-07.
 
 | Published release line | Security fixes |
 | --- | --- |
 |1.x|Supported|
 |2.x|Supported|
 
-The owner approved continued1.x security support and2.x support from actual2.0.0
-publication. Publishing2.0.0 does not withdraw1.x support. See the
+The owner approved continued 1.x security support and 2.x support from 2.0.0
+publication. See the
 [published release](https://github.com/Maatify/channel-delivery/releases/tag/v2.0.0)
 and [release history](https://github.com/Maatify/channel-delivery/releases).
-The immutable2.0.0 artifact retains the dated preparation snapshot that preceded
-publication; this default-branch policy records the current support state.
+The immutable 2.0.0 artifact retains its dated preparation snapshot. This
+default-branch policy records the current support state.
 
-Security support does not change PHP compatibility: this2.0.0 artifact requires
-PHP8.4+, while previously published artifacts retain their own manifests. See
-[upgrade notes](docs/upgrade/2.0.0.md).
+This source targets 2.1.0 and requires PHP 8.4 or later within PHP 8. Published
+artifacts follow their own manifests, including the published 2.0.0 baseline.
+See the [2.1.0 target guide](docs/releases/2.1.0.md) and the
+[2.0.0 upgrade notes](docs/upgrade/2.0.0.md).
 
 ## Reporting a vulnerability
 

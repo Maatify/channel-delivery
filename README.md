@@ -209,7 +209,10 @@ Create the environment configuration file:
 cp .env.example .env
 ```
 
-Edit `.env` and configure the following variables.
+The tables below introduce common settings. Use the complete
+[configuration and CLI reference](docs/reference/configuration.md) for branding,
+database session timeout, processing lease, synthetic retention and other
+operator settings.
 
 ### Application
 
@@ -252,36 +255,10 @@ Queue payloads and sensitive data are encrypted using **AES-256-GCM** through `m
 | `CRYPTO_ACTIVE_KEY_ID` | Identifier of the active encryption key |
 | `CRYPTO_KEYS`          | JSON array containing encryption keys   |
 
-Configuration shape only — the placeholder below is deliberately not a usable key.
-Replace it with a new private value generated for this installation:
-
-```env
-CRYPTO_ACTIVE_KEY_ID=v1
-CRYPTO_KEYS='[{"id":"v1","key":"<YOUR_UNIQUE_32_BYTE_SECRET>"}]'
-```
-
-Key requirements:
-
-* Key must be **exactly 32 bytes**
-* Keys support **rotation**
-* Old keys remain for **decryption only**
-
-The following existing format produces 32 ASCII key-material bytes from 16 random bytes (128 bits of randomness); it is not 32 random bytes and is not automatically hex-decoded:
-
-```bash
-php -r "echo bin2hex(random_bytes(16));"
-```
-
-Use the locally generated **32-character ASCII string** in place of the placeholder
-above. Generate a fresh private value for each installation; never copy a published
-example key or commit/paste the generated key into source, logs or public messages.
-Keep historical keys privately when rotating keys for retained data.
-
-Key requirements:
-
-* Must be **exactly 32 raw bytes** (32 ASCII characters in this example)
-* Used as the symmetric encryption key for AES-256-GCM
-* Keys support **rotation**
+`CRYPTO_KEYS` is empty in the example configuration. Set a private 32-byte key
+using the [generation and rotation procedure](docs/reference/configuration.md#encryption-keys)
+before using the queue or synthetic endpoint. Keep the keys needed for retained
+queue data, receipt replay and synthetic records.
 
 ---
 
@@ -297,7 +274,7 @@ SMTP configuration used by the email delivery worker.
 | `MAIL_PASSWORD`     | SMTP password                   |
 | `MAIL_FROM_ADDRESS` | Default sender email            |
 | `MAIL_FROM_NAME`    | Sender display name             |
-| `MAIL_ENCRYPTION`   | Encryption type (`tls` / `ssl`) |
+| `MAIL_ENCRYPTION`   | `tls` for STARTTLS, `ssl` for implicit TLS, or empty/unset for an intentionally unencrypted relay. Other values prevent SMTP initialization. |
 | `MAIL_TIMEOUT`      | SMTP timeout (seconds)          |
 | `MAIL_DEBUG_LEVEL`  | SMTP debug level (0 = disabled) |
 
@@ -378,20 +355,19 @@ curl -X POST http://localhost:8080/api/v1/email/enqueue \
 
 ## Worker Usage
 
-Run the email worker:
+Run the email worker for a basic local setup.
 
 ```bash
 php scripts/email_worker.php --batch=50 --loop --sleep=5
 ```
 
-This worker should normally run under a **process manager** like Supervisor or systemd.
-It replaces a lost database connection before the next batch, and after repeated
-connection failures it exits with code `1` so the process manager restarts it.
-`php scripts/email_queue_status.php` reports queue stalls for your monitoring.
+Run production workers under [Supervisor](docs/how-to/run-worker.md#supervisor-configuration)
+or [systemd](docs/how-to/run-worker.md#systemd). The worker can reconnect before
+a claim and exits with code `1` after repeated connection failures.
 
-See the worker setup guide:
-
-[Run Worker Guide](docs/how-to/run-worker.md)
+`php scripts/email_queue_status.php` alone checks the queue. For heartbeat and
+recent outcome alerts, give each worker a persistent state file and pass all
+those paths to [the monitor](docs/how-to/run-worker.md#monitor-queue-stalls).
 
 ---
 

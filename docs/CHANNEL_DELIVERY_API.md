@@ -27,7 +27,10 @@ This document should be updated whenever:
 
 ---
 
-For environment/CLI details use the [configuration reference](reference/configuration.md); for project2.0.0 installation/runtime compatibility use the [usage guide](guides/USAGE_GUIDE.md). The detailed validation and template sections below describe **legacy v1**; v2 contracts are separate linked references.
+Use the [configuration reference](reference/configuration.md) for environment
+and CLI settings and the [usage guide](guides/USAGE_GUIDE.md) for installation and
+runtime compatibility. The validation and template sections below describe
+legacy v1. The v2 contracts are linked above.
 
 ## Base Behavior
 
@@ -78,7 +81,8 @@ GET /health
 
 ### Purpose
 
-Checks whether the service is alive and whether database connectivity is healthy.
+Checks whether the handler can execute `SELECT 1` on its injected database
+connection.
 
 ### Success Response
 
@@ -91,6 +95,9 @@ Checks whether the service is alive and whether database connectivity is healthy
 
 ### Degraded Response
 
+If `SELECT 1` fails after the handler receives a PDO connection, the handler
+returns HTTP 503 with this JSON body.
+
 ```json
 {
   "status": "degraded",
@@ -100,8 +107,13 @@ Checks whether the service is alive and whether database connectivity is healthy
 
 ### Status Codes
 
-* `200 OK` → service healthy
-* `503 Service Unavailable` → service alive but database degraded
+* `200 OK` means the database query succeeded.
+* `503 Service Unavailable` with the body above means the handler's query failed.
+
+PDO creation can fail before the handler runs. Connection setup, framework and
+bootstrap failures can produce a generic HTTP 5xx or no response. Treat every
+non-2xx or timeout as unhealthy. The JSON above applies to failures inside the
+handler. A healthy database probe does not check the worker or SMTP.
 
 ---
 
@@ -313,12 +325,20 @@ Supported languages for current templates:
 
 ### Shared Template Globals
 
-The service injects the following global template variables automatically:
+The service provides these Twig globals.
 
-* `app_name`
-* `support_email`
+| Global | Source | Default when unset |
+| --- | --- | --- |
+| `app_name` | `APP_NAME` | `App` |
+| `support_email` | `SUPPORT_EMAIL` | Empty string |
+| `brand_name_ar` | `APP_BRAND_NAME_AR` | `app_name` |
+| `brand_name_en` | `APP_BRAND_NAME_EN` | `app_name` |
 
-Callers do **not** need to pass these values in `context`.
+The bundled templates use `app_name` and `support_email`. The optional brand
+globals affect templates that reference them. The worker also injects `lang`
+into the render context from the message's `language`. Supply the template's
+required context fields. The worker provides these values automatically.
+[Configuration reference](reference/configuration.md#application--database--crypto)
 
 ---
 

@@ -11,6 +11,7 @@ Use `X-Api-Key` and `Content-Type: application/json`, with the same active-key,
 IP whitelist, server-owned consumer binding and existing shared per-key rate limit
 as real v2 email. A rotated key keeps the operator-approved namespace. The caller
 cannot select a namespace in its request. Missing binding returns403.
+See the [synthetic-only schema and binding setup](../how-to/synthetic-email-operations.md).
 
 The JSON field names, byte bounds, strict integer rules and raw JSON shape checks
 are **shared** with [atomic email](email-atomic.md). Maximum raw body is1MiB before
@@ -49,8 +50,10 @@ an instruction to enqueue later. Nothing copies these records into the real queu
 
 Invalid JSON400; auth401/IP or consumer403; unsupported media415; invalid fields,
 shapes or Idempotency-Key422; body too large413; current shared rate quota429.
-Missing/invalid server retention, storage/schema/crypto failures or unknown commit
-return503 with `{"error":"recording_unavailable","recording":"unknown"}`.
+Missing/invalid server retention, unmet
+[database session preconditions](../reference/configuration.md#database-sessions),
+storage/schema/crypto failures or unknown commit return HTTP 503 with
+`{"error":"recording_unavailable","recording":"unknown"}`.
 Framework/bootstrap errors can return generic5xx. Never turn an unavailable
 synthetic call into real email enqueue or claim a confirmed record after failure.
 
